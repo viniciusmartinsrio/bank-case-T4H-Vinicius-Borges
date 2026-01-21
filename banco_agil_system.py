@@ -38,122 +38,174 @@ class BancoAgilSystem:
     def processar_entrada(self, entrada_usuario: str) -> str:
         """
         Processa a entrada do usuário e retorna a resposta apropriada.
-        
+
+        Este é o método central de roteamento do sistema. Baseado no estado
+        atual (cliente autenticado, agente ativo), direciona a entrada para
+        o agente apropriado.
+
+        Fluxo de decisão:
+        1. Cliente não autenticado → TriagemAgent
+        2. Cliente autenticado, sem agente → Menu principal
+        3. Agente ativo específico → Roteia para o agente
+
         Args:
-            entrada_usuario: Entrada do usuário
-            
+            entrada_usuario: Entrada do usuário (texto livre)
+
         Returns:
-            Resposta do sistema
+            str: Resposta do sistema após processamento
         """
+        # Registra a entrada do usuário no histórico
         self._adicionar_historico("usuario", entrada_usuario)
-        
+
+        # Verifica se a conversa ainda está ativa (pode ter sido encerrada)
         if not self.conversa_ativa:
             return "Atendimento encerrado."
-        
-        # Se cliente não autenticado, processa triagem
+
+        # ROTEAMENTO BASEADO EM ESTADO:
+
+        # Caso 1: Cliente ainda não autenticado → processo de autenticação
         if not self.cliente_autenticado:
             resposta = self._processar_triagem(entrada_usuario)
-        # Se cliente autenticado mas sem agente ativo, processa menu
+
+        # Caso 2: Cliente autenticado mas escolhendo serviço → menu principal
         elif self.agente_ativo is None:
             resposta = self.processar_opcao_menu(entrada_usuario)
-        # Roteia para o agente apropriado
+
+        # Caso 3: Agente de Crédito ativo → operações de limite
         elif self.agente_ativo == "credito":
             resposta = self._processar_credito(entrada_usuario)
+
+        # Caso 4: Agente de Entrevista ativo → coleta de dados financeiros
         elif self.agente_ativo == "entrevista_credito":
             resposta = self._processar_entrevista(entrada_usuario)
+
+        # Caso 5: Agente de Câmbio ativo → consultas de cotação
         elif self.agente_ativo == "cambio":
             resposta = self._processar_cambio(entrada_usuario)
+
+        # Caso inesperado: estado inválido (não deveria acontecer)
         else:
             resposta = "❌ Estado inválido do sistema."
-        
+
+        # Registra a resposta do sistema no histórico
         self._adicionar_historico("sistema", resposta)
         return resposta
 
     def _processar_triagem(self, entrada: str) -> str:
-        """Processa entrada na fase de triagem."""
+        """
+        Processa entrada durante a fase de triagem/autenticação.
+
+        A triagem é um processo de 2 etapas:
+        1. Coleta do CPF
+        2. Coleta da data de nascimento e autenticação
+
+        Mantém estado usando atributos temporários prefixados com _triagem_
+        para controlar qual etapa está sendo executada.
+        """
         entrada_limpa = entrada.strip()
-        
-        # Verifica se é primeira vez (solicita CPF)
+
+        # Inicializa flags de controle na primeira execução
+        # Estes atributos controlam o estado da coleta de dados
         if not hasattr(self, "_triagem_cpf_coletado"):
             self._triagem_cpf_coletado = False
             self._triagem_data_coletada = False
             self._triagem_cpf = None
             self._triagem_data = None
-        
-        # Coleta CPF
+
+        # ETAPA 1: Coleta do CPF
         if not self._triagem_cpf_coletado:
-            self._triagem_cpf = entrada_limpa
-            self._triagem_cpf_coletado = True
-            return self.triagem.solicitar_data_nascimento()
-        
-        # Coleta data de nascimento e autentica
+            self._triagem_cpf = entrada_limpa  # Armazena CPF temporariamente
+            self._triagem_cpf_coletado = True   # Marca CPF como coletado
+            return self.triagem.solicitar_data_nascimento()  # Pede próximo dado
+
+        # ETAPA 2: Coleta da data de nascimento e tentativa de autenticação
         if not self._triagem_data_coletada:
-            self._triagem_data = entrada_limpa
-            self._triagem_data_coletada = True
-            
+            self._triagem_data = entrada_limpa  # Armazena data temporariamente
+            self._triagem_data_coletada = True  # Marca data como coletada
+
+            # Tenta autenticar com CPF e data fornecidos
             sucesso, mensagem, cliente = self.triagem.autenticar(
                 self._triagem_cpf,
                 self._triagem_data
             )
-            
+
             if sucesso:
-                self.cliente_autenticado = cliente
-                # Limpa flags
+                # AUTENTICAÇÃO BEM-SUCEDIDA
+                self.cliente_autenticado = cliente  # Armazena dados do cliente
+
+                # Limpa flags temporárias (não serão mais necessárias)
                 self._triagem_cpf_coletado = False
                 self._triagem_data_coletada = False
                 self._triagem_cpf = None
                 self._triagem_data = None
-                
-                # Próxima etapa: identificar assunto
-                self.agente_ativo = None  # Sai do modo triagem
+
+                # Sai do modo triagem e exibe menu principal
+                self.agente_ativo = None  # None = modo menu
                 return mensagem + "\n\n" + self.triagem.identificar_assunto()
             else:
+                # AUTENTICAÇÃO FALHOU
                 if self.triagem.pode_tentar_novamente():
-                    # Reseta para tentar novamente
+                    # Ainda há tentativas disponíveis, permite tentar novamente
                     self._triagem_cpf_coletado = False
                     self._triagem_data_coletada = False
                     return mensagem + "\n\n" + self.triagem.solicitar_cpf()
                 else:
-                    # Encerra após 3 tentativas
+                    # Tentativas esgotadas (3 falhas), encerra atendimento
                     self.conversa_ativa = False
                     return mensagem
-        
+
         return "Estado inválido na triagem."
 
     def _processar_credito(self, entrada: str) -> str:
-        """Processa entrada no agente de crédito."""
+        """
+        Processa entrada quando o CreditoAgent está ativo.
+
+        Fluxo do CreditoAgent:
+        1. Exibe limite atual e pergunta se quer solicitar aumento
+        2. Se sim: coleta novo limite e processa solicitação
+        3. Se aprovado: volta ao menu
+        4. Se rejeitado: oferece entrevista financeira
+        """
         entrada_limpa = entrada.strip().lower()
-        
-        # Inicializa agente se necessário
+
+        # Primeira interação com o agente: define cliente e consulta limite
         if not self.credito.cliente:
             self.credito.definir_cliente(self.cliente_autenticado)
             return self.credito.consultar_limite()
-        
-        # Verifica se quer solicitar aumento
+
+        # FASE 1: Pergunta se quer solicitar aumento
         if not self.credito.solicitacao_em_andamento:
+            # Cliente quer solicitar aumento
             if entrada_limpa in ["sim", "s", "yes", "1"]:
                 return self.credito.solicitar_novo_limite()
+            # Cliente não quer, volta ao menu
             elif entrada_limpa in ["não", "nao", "n", "no", "2"]:
                 return self._oferecer_menu_principal()
+            # Resposta inválida, repete a pergunta
             else:
                 return "❌ Responda com 'sim' ou 'não'.\n\n" + self.credito.consultar_limite()
-        
-        # Processa a solicitação de novo limite
+
+        # FASE 2: Processa o valor do novo limite solicitado
         sucesso, mensagem = self.credito.processar_solicitacao(entrada)
-        
+
+        # Validação falhou (valor inválido, não numérico, etc.)
         if not sucesso:
             return mensagem + "\n\n" + self.credito.solicitar_novo_limite()
-        
-        # Verifica se foi rejeitado e oferece entrevista
+
+        # FASE 3: Trata resultado da solicitação
+
+        # Caso REJEITADO: Oferece entrevista para melhorar score
         if "REJEITADA" in mensagem:
+            # Cliente aceita fazer entrevista
             if entrada_limpa in ["sim", "s", "yes", "1"]:
-                self.agente_ativo = "entrevista_credito"
+                self.agente_ativo = "entrevista_credito"  # Troca de agente
                 self.entrevista.definir_cliente(self.cliente_autenticado)
                 return self.entrevista.iniciar_entrevista()
+            # Cliente recusa entrevista, volta ao menu
             elif entrada_limpa in ["não", "nao", "n", "no", "2"]:
                 return self._oferecer_menu_principal()
-        
-        # Se aprovado, oferece voltar ao menu
+
+        # Caso APROVADO: Volta ao menu principal
         return mensagem + "\n\n" + self._oferecer_menu_principal()
 
     def _processar_entrevista(self, entrada: str) -> str:
@@ -211,34 +263,58 @@ class BancoAgilSystem:
         return self.triagem.identificar_assunto()
 
     def processar_opcao_menu(self, opcao: str) -> str:
-        """Processa a escolha de opção do menu principal."""
+        """
+        Processa a escolha do cliente no menu principal.
+
+        Mapeia a opção escolhida (1-5) para o agente correspondente e
+        inicializa o agente selecionado. Reseta todos os outros agentes
+        para garantir estado limpo.
+
+        Args:
+            opcao: Número da opção escolhida pelo cliente (string "1" a "5")
+
+        Returns:
+            str: Resposta do agente selecionado ou mensagem de erro
+        """
+        # Delega ao TriagemAgent para mapear opção → nome do agente
         agente, sucesso = self.triagem.direcionar_agente(opcao)
-        
+
+        # Opção inválida (não é 1-5)
         if not sucesso:
             return "❌ Opção inválida. " + self.triagem.identificar_assunto()
-        
+
+        # Opção 5: Encerrar atendimento
         if agente == "encerramento":
             self.conversa_ativa = False
             return "✅ Obrigado por usar o Banco Ágil. Até logo!"
-        
-        # Reseta agentes anteriores
+
+        # Reseta todos os agentes para garantir estado limpo
+        # (importante quando cliente volta ao menu após usar um agente)
         self.credito.reset()
         self.entrevista.reset()
         self.cambio.reset()
-        
-        # Ativa novo agente
+
+        # Define qual agente está ativo agora
         self.agente_ativo = agente
-        
+
+        # Inicializa o agente selecionado e retorna primeira mensagem
+
         if agente == "credito":
+            # Opções 1 ou 2: Consultar/Solicitar limite
             self.credito.definir_cliente(self.cliente_autenticado)
             return self.credito.consultar_limite()
+
         elif agente == "entrevista_credito":
+            # Opção 3: Entrevista financeira direta
             self.entrevista.definir_cliente(self.cliente_autenticado)
             return self.entrevista.iniciar_entrevista()
+
         elif agente == "cambio":
+            # Opção 4: Consultar cotação de moedas
             self.cambio.definir_cliente(self.cliente_autenticado)
             return self.cambio.solicitar_moeda()
-        
+
+        # Estado inesperado (não deveria acontecer)
         return "❌ Erro ao direcionar para agente."
 
     def _adicionar_historico(self, remetente: str, mensagem: str):

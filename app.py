@@ -32,7 +32,7 @@ def main():
     
     with col1:
         st.title("🏦 Banco Ágil")
-        st.subtitle("Sistema de Atendimento com Agentes de IA")
+        st.subheader("Sistema de Atendimento com Agentes de IA")
     
     with col2:
         if st.button("🔄 Reiniciar Conversa", use_container_width=True):
