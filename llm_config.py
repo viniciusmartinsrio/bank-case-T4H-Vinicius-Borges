@@ -7,8 +7,8 @@ otimizados de acordo com suas responsabilidades e estilo de comunicação.
 
 from typing import Dict, Any
 
-# Modelo base utilizado (Groq API - Llama 3.1 70B)
-DEFAULT_MODEL = "llama-3.1-70b-versatile"
+# Modelo base utilizado (Groq API - Llama 3.3 70B)
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 # Configurações específicas por agente
 LLM_CONFIGS: Dict[str, Dict[str, Any]] = {
