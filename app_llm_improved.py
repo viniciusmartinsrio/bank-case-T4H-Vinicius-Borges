@@ -128,14 +128,41 @@ def processar_mensagem_com_feedback(mensagem: str, mostrar_validacao: bool = Tru
         st.rerun()
 
     except RateLimitError as e:
-        st.warning("""
-        ⏳ **Aguarde um momento...**
+        # Extrai tempo de espera do erro
+        erro_msg = str(e)
+        tempo_espera = "alguns minutos"
 
-        Atingimos o limite de requisições. Por favor, aguarde alguns minutos e tente novamente.
+        # Tenta extrair tempo exato (ex: "13m18.336s")
+        match = re.search(r'try again in (\d+[mhs\d.]+)', erro_msg)
+        if match:
+            tempo_espera = match.group(1)
+
+        st.error(f"""
+        🚫 **Limite de Tokens Atingido (Groq Free Tier)**
+
+        Você atingiu o limite diário de 100.000 tokens do plano gratuito do Groq.
+
+        ⏳ **Tempo de espera:** {tempo_espera}
+
+        💡 **O que fazer:**
+        - Aguarde o tempo indicado acima
+        - Ou faça upgrade para o plano pago do Groq: https://console.groq.com/settings/billing
+        - Ou use um modelo menor (modifique `llm_config.py` para usar `llama-3.1-8b-instant`)
+
+        **Dica:** O limite reseta às 00:00 UTC (21:00 horário de Brasília).
         """)
+
         # Remove última mensagem do usuário para poder reenviar
         if st.session_state.mensagens and st.session_state.mensagens[-1]["remetente"] == "Você":
             st.session_state.mensagens.pop()
+
+        # Adiciona informação no histórico
+        st.session_state.mensagens.append({
+            "remetente": "Sistema",
+            "mensagem": f"⚠️ Limite de rate atingido. Aguarde {tempo_espera} ou reinicie amanhã.",
+            "timestamp": datetime.now(),
+            "agente": "sistema"
+        })
 
     except ConnectionError:
         st.error("""
@@ -468,18 +495,29 @@ def main():
             st.session_state.aguardando_confirmacao = None
             st.rerun()
 
-    # Inicia conversa se não iniciada
+    # Inicia conversa se não iniciada (sem chamar LLM imediatamente)
     if not st.session_state.conversa_iniciada:
-        with st.spinner("🤖 Iniciando atendimento..."):
-            mensagem_inicial = st.session_state.sistema.processar_mensagem("Olá!")
-            st.session_state.mensagens.append({
-                "remetente": "Assistente",
-                "mensagem": mensagem_inicial,
-                "timestamp": datetime.now(),
-                "agente": "triagem"
-            })
-            st.session_state.conversa_iniciada = True
-            st.rerun()
+        # Mensagem de boas-vindas estática (sem LLM)
+        mensagem_inicial = """
+👋 **Bem-vindo ao Banco Ágil!**
+
+Sou seu assistente virtual inteligente, pronto para ajudá-lo com:
+- 💳 Consultas e solicitações de crédito
+- 💱 Cotações de moedas
+- 📋 Atualização de dados financeiros
+- E muito mais!
+
+Para começar, por favor **informe seu CPF** (11 dígitos).
+        """.strip()
+
+        st.session_state.mensagens.append({
+            "remetente": "Assistente",
+            "mensagem": mensagem_inicial,
+            "timestamp": datetime.now(),
+            "agente": "triagem"
+        })
+        st.session_state.conversa_iniciada = True
+        st.rerun()
 
     # Modal de confirmação
     if st.session_state.aguardando_confirmacao:

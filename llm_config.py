@@ -3,17 +3,38 @@ Configurações de LLM para cada agente do Banco Ágil.
 
 Define parâmetros específicos (temperature, top_p, max_tokens) para cada agente,
 otimizados de acordo com suas responsabilidades e estilo de comunicação.
+
+🚨 IMPORTANTE: TROCA DE MODELO PARA ECONOMIZAR TOKENS
+==================================================
+
+Se você atingiu o rate limit do Groq (100.000 tokens/dia), você pode:
+
+1. **OPÇÃO RÁPIDA**: Trocar para o modelo menor
+   - Mude a linha: ACTIVE_MODEL = DEFAULT_MODEL
+   - Para: ACTIVE_MODEL = FALLBACK_MODEL
+   - Isso usará o Llama 3.1 8B ao invés do 3.3 70B (consome ~10x menos tokens)
+
+2. **Aguardar reset**: O limite reseta às 00:00 UTC (21:00 Brasília)
+
+3. **Fazer upgrade**: Plano pago em https://console.groq.com/settings/billing
+
+O modelo menor (8B) é mais rápido e usa muito menos tokens, mas pode ter
+respostas ligeiramente menos sofisticadas.
 """
 
 from typing import Dict, Any
 
-# Modelo base utilizado (Groq API - Llama 3.3 70B)
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+# Modelos disponíveis no Groq
+DEFAULT_MODEL = "llama-3.3-70b-versatile"  # Principal - 70B parâmetros
+FALLBACK_MODEL = "llama-3.1-8b-instant"    # Alternativo - 8B, muito mais rápido e econômico
+
+# Escolha o modelo ativo (mude para FALLBACK_MODEL se atingir rate limit)
+ACTIVE_MODEL = FALLBACK_MODEL  # Usando modelo menor para economizar tokens
 
 # Configurações específicas por agente
 LLM_CONFIGS: Dict[str, Dict[str, Any]] = {
     "triagem": {
-        "model_name": DEFAULT_MODEL,
+        "model_name": ACTIVE_MODEL,
         "temperature": 0.3,  # Baixa - precisa seguir protocolo rigoroso de autenticação
         "top_p": 0.9,        # Relativamente focado nas respostas mais prováveis
         "max_tokens": 200,   # Respostas curtas e diretas
@@ -21,7 +42,7 @@ LLM_CONFIGS: Dict[str, Dict[str, Any]] = {
         "description": "Agente de Triagem - Autenticação e roteamento inicial"
     },
     "credito": {
-        "model_name": DEFAULT_MODEL,
+        "model_name": ACTIVE_MODEL,
         "temperature": 0.4,  # Moderada-baixa - balance entre protocolo e empatia
         "top_p": 0.85,       # Focado mas permite alguma criatividade na comunicação
         "max_tokens": 250,   # Respostas médias, precisa explicar decisões
@@ -29,7 +50,7 @@ LLM_CONFIGS: Dict[str, Dict[str, Any]] = {
         "description": "Agente de Crédito - Consulta e solicitação de limite"
     },
     "entrevista_credito": {
-        "model_name": DEFAULT_MODEL,
+        "model_name": ACTIVE_MODEL,
         "temperature": 0.7,  # Alta - precisa ser conversacional e natural
         "top_p": 0.95,       # Permite maior diversidade nas respostas
         "max_tokens": 300,   # Respostas mais longas para conduzir entrevista
@@ -37,7 +58,7 @@ LLM_CONFIGS: Dict[str, Dict[str, Any]] = {
         "description": "Agente de Entrevista - Coleta de dados financeiros"
     },
     "cambio": {
-        "model_name": DEFAULT_MODEL,
+        "model_name": ACTIVE_MODEL,
         "temperature": 0.2,  # Muito baixa - precisa ser factual e preciso
         "top_p": 0.8,        # Bastante focado, evita "criatividade" com números
         "max_tokens": 150,   # Respostas curtas, apenas informações necessárias
