@@ -78,7 +78,7 @@ bank-case-T4H-Vinicius-Borges/
        │                 │                 │
        ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────┐
-│         Groq API (Llama 3.1 8B Instant)         │
+│         Groq API (Llama 3.1 8B)                 │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -206,7 +206,7 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
 - **Python 3.8+**: Linguagem base
 - **LangGraph**: Orquestração de agentes com máquina de estados
 - **LangChain**: Framework para aplicações com LLM
-- **Groq API**: Inferência ultra-rápida de LLM (Llama 3.1 8B Instant)
+- **Groq API**: Inferência ultra-rápida de LLM (Llama 3.1 8B)
 - **Streamlit**: Interface web interativa
 - **CSV**: Persistência de dados (clientes, scores, solicitações)
 - **API Pública**: exchangerate-api.com para cotações
@@ -274,7 +274,7 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
   - Apresentação de menu numerado (4 opções)
   - Identificação de intenção do usuário para roteamento
   - Tratamento de solicitação de encerramento
-- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), DataManager
+- **Tecnologias**: ChatGroq (Llama 3.1 8B), DataManager
 - **Arquivo**: `agents/triagem_agent_llm.py`
 
 ### 2. **Agente de Crédito** (`CreditoAgentLLM`)
@@ -289,7 +289,7 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
   - Atualização de limite em `clientes.csv` quando aprovado
   - Oferta proativa de entrevista financeira se rejeitado
   - Registro timestampado em `solicitacoes_aumento_limite.csv`
-- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), DataManager, regex para extração de valores
+- **Tecnologias**: ChatGroq (Llama 3.1 8B), DataManager, regex para extração de valores
 - **Arquivo**: `agents/credito_agent_llm.py`
 
 ### 3. **Agente de Entrevista de Crédito** (`EntrevistaCreditoAgentLLM`)
@@ -306,7 +306,7 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
   - Atualização automática em `clientes.csv`
   - Mensagem final com instrução para voltar ao menu
   - Contexto preservado para redirecionamento ao CreditoAgent
-- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), ScoreCalculator, DataManager, regex avançado
+- **Tecnologias**: ChatGroq (Llama 3.1 8B), ScoreCalculator, DataManager, regex avançado
 - **Arquivo**: `agents/entrevista_credito_agent_llm.py`
 
 ### 4. **Agente de Câmbio** (`CambioAgentLLM`)
@@ -319,7 +319,7 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
   - Conversão para múltiplos valores (R$ 1, R$ 100, R$ 1000)
   - Tratamento de erros de API (timeout, moeda inválida)
   - Opção de consultar outra moeda ou retornar ao menu
-- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), CurrencyFetcher (requests + API pública)
+- **Tecnologias**: ChatGroq (Llama 3.1 8B), CurrencyFetcher (requests + API pública)
 - **Arquivo**: `agents/cambio_agent_llm.py`
 
 ## 🗄️ Estrutura de Dados
@@ -510,7 +510,7 @@ if not estado.get("cliente_autenticado"):
 
 2. **Free Tier Generoso**: 100k tokens/dia gratuitos, suficiente para prototipagem e testes extensivos sem custos.
 
-3. **Modelo Rápido e Eficiente**: Llama 3.1 8B Instant oferece boa capacidade de conversação em português com inferência extremamente rápida (< 500ms) e consumo eficiente de tokens.
+3. **Modelo Rápido e Eficiente**: Llama 3.1 8B oferece boa capacidade de conversação em português com inferência extremamente rápida (< 500ms) e consumo eficiente de tokens.
 
 4. **Simplicidade de Integração**: LangChain tem integração nativa (`langchain-groq`), reduzindo complexidade.
 
@@ -518,7 +518,7 @@ if not estado.get("cliente_autenticado"):
 
 **Trade-off**: Dependência de API externa (requer conexão internet). Mitigado com tratamento robusto de erros de rede.
 
-**Nota sobre Modelo Ativo**: O projeto está configurado para usar **Llama 3.1 8B Instant** (linha 32 de `llm_config.py`). O modelo maior **Llama 3.3 70B** está disponível mas desativado para economizar tokens do free tier. Para ativar o modelo maior:
+**Nota sobre Modelo Ativo**: O projeto está configurado para usar **Llama 3.1 8B** (linha 32 de `llm_config.py`). O modelo maior **Llama 3.3 70B** está disponível mas desativado para economizar tokens do free tier. Para ativar o modelo maior:
 ```python
 # Em llm_config.py, linha 32
 ACTIVE_MODEL = DEFAULT_MODEL  # Troca para 70B (mais capaz, mais lento, mais tokens)

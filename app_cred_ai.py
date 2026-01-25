@@ -426,7 +426,7 @@ def exibir_sidebar():
         - **Streamlit**: Interface web interativa
         - **LangChain**: Framework para aplicações com LLM's e arquitetura multi agentes
         - **LangGraph**: Orquestração de agentes com máquina de estados
-        - **Groq API**: Inferência com opções de LLM's sem custo para volumetrias baixas (Llama 3.1 8B Instant)
+        - **Groq API**: Inferência com opções de LLM's sem custo para volumetrias baixas (Llama 3.1 8B)
         - **NLP**: Chat de conversação natural com IA
         - **External API**: exchangerate-api.com para cotações
         """)
