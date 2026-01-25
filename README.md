@@ -436,9 +436,9 @@ Use os seguintes clientes para testar:
 ## 🚧 Desafios Enfrentados e Soluções
 
 ### 1. Engenharia de Prompts dos Agentes de IA
-**Desafio**: Encontrar um equilíbrio lógico entre as instruções dos prompts dos agentes e as funcionalidades de placeholder foi o maior desafio
+**Desafio**: Encontrar um equilíbrio lógico entre as instruções dos prompts dos agentes e as funcionalidades do projeto para prezar por boas práticas de Engenharia de Prompt e otimização de custos e performance dos LLM's foi o maior desafio
 
-**Solução Implementada**: Equilibrar as instruções com funções hardcode para otimizar performance e tokens ($$$)
+**Solução Implementada**: Equilibrar as instruções com funções hardcode para otimizar performance e número de tokens ($$$)
 
 ### 2. Dinâmica de estados dos agentes
 **Desafio**: Definir melhor solução para controle de estados dos Agentes
