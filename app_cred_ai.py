@@ -1,6 +1,5 @@
 """
-Interface Streamlit MELHORADA para o Sistema de Agentes Bancários com LLM - Banco Ágil
-Versão com UX/UI aprimorada: loading feedback, quick replies, validação, etc.
+Interface Streamlit para o Sistema de Agentes Bancários com LLM - Banco Ágil
 """
 
 import streamlit as st
@@ -9,7 +8,6 @@ import time
 from datetime import datetime
 from typing import Optional
 from banco_agil_langgraph import BancoAgilLangGraph
-from groq import RateLimitError
 
 
 # ==================== FUNÇÕES DE VALIDAÇÃO ====================
@@ -51,6 +49,51 @@ def configurar_pagina():
         initial_sidebar_state="expanded"
     )
 
+    # CSS customizado para reduzir espaço em branco no final da página
+    st.markdown("""
+        <style>
+        /* Reduz drasticamente o padding inferior do container principal */
+        .main .block-container {
+            padding-bottom: 1rem !important;
+            padding-top: 3rem !important;
+        }
+
+        /* Remove espaço extra de todos os elementos filhos */
+        .main .block-container > div {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+
+        /* Força remoção de espaço do último elemento */
+        .main .block-container > div:last-child {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+
+        /* Remove espaço extra do elemento root do Streamlit */
+        .main {
+            padding-bottom: 0 !important;
+        }
+
+        /* Reduz espaço entre elementos do formulário */
+        .stForm {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }
+
+        /* Caption mais próximo */
+        .stCaption {
+            margin-top: -0.5rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+
+        /* Remove padding extra do footer do Streamlit */
+        footer {
+            padding: 0.5rem !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
 
 # ==================== INICIALIZAÇÃO DO ESTADO ====================
 
@@ -64,9 +107,13 @@ def initialize_session_state():
             st.session_state.erro_inicializacao = None
             st.session_state.aguardando_confirmacao = None
             st.session_state.ultima_acao = None
+            st.session_state.input_counter = 0  # Contador para resetar input
         except ValueError as e:
             st.session_state.sistema = None
             st.session_state.erro_inicializacao = str(e)
+        except Exception as e:
+            st.session_state.sistema = None
+            st.session_state.erro_inicializacao = f"Erro ao inicializar: {type(e).__name__}: {str(e)}"
 
 
 # ==================== PROCESSAMENTO DE MENSAGENS ====================
@@ -125,44 +172,10 @@ def processar_mensagem_com_feedback(mensagem: str, mostrar_validacao: bool = Tru
             st.success(f"🔄 Redirecionado para {agente_atual.replace('_', ' ').title()}")
             time.sleep(0.3)
 
+        # Incrementa contador para resetar o input na próxima renderização
+        st.session_state.input_counter += 1
+
         st.rerun()
-
-    except RateLimitError as e:
-        # Extrai tempo de espera do erro
-        erro_msg = str(e)
-        tempo_espera = "alguns minutos"
-
-        # Tenta extrair tempo exato (ex: "13m18.336s")
-        match = re.search(r'try again in (\d+[mhs\d.]+)', erro_msg)
-        if match:
-            tempo_espera = match.group(1)
-
-        st.error(f"""
-        🚫 **Limite de Tokens Atingido (Groq Free Tier)**
-
-        Você atingiu o limite diário de 100.000 tokens do plano gratuito do Groq.
-
-        ⏳ **Tempo de espera:** {tempo_espera}
-
-        💡 **O que fazer:**
-        - Aguarde o tempo indicado acima
-        - Ou faça upgrade para o plano pago do Groq: https://console.groq.com/settings/billing
-        - Ou use um modelo menor (modifique `llm_config.py` para usar `llama-3.1-8b-instant`)
-
-        **Dica:** O limite reseta às 00:00 UTC (21:00 horário de Brasília).
-        """)
-
-        # Remove última mensagem do usuário para poder reenviar
-        if st.session_state.mensagens and st.session_state.mensagens[-1]["remetente"] == "Você":
-            st.session_state.mensagens.pop()
-
-        # Adiciona informação no histórico
-        st.session_state.mensagens.append({
-            "remetente": "Sistema",
-            "mensagem": f"⚠️ Limite de rate atingido. Aguarde {tempo_espera} ou reinicie amanhã.",
-            "timestamp": datetime.now(),
-            "agente": "sistema"
-        })
 
     except ConnectionError:
         st.error("""
@@ -171,14 +184,42 @@ def processar_mensagem_com_feedback(mensagem: str, mostrar_validacao: bool = Tru
         Não conseguimos conectar ao servidor. Verifique sua internet e tente novamente.
         """)
 
+    except TimeoutError:
+        st.error("""
+        ⏱️ **Timeout - Processamento Demorado**
+
+        O processamento está demorando mais que o esperado. Possíveis causas:
+        - API da Groq está lenta ou indisponível
+        - Sua conexão com internet está instável
+        - Chave de API pode estar inválida
+
+        💡 **Tente:**
+        - Aguardar alguns segundos e tentar novamente
+        - Verificar se a GROQ_API_KEY está configurada corretamente no arquivo .env
+        - Reiniciar a conversa
+        """)
+
     except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+
         st.error(f"""
         ❌ **Ops, algo deu errado!**
 
         Tente novamente ou reinicie a conversa.
 
-        *Erro técnico: {type(e).__name__}*
+        *Erro técnico: {error_type}*
         """)
+
+        # Em modo debug, exibe detalhes completos
+        with st.expander("🔍 Detalhes técnicos (para debug)"):
+            st.code(f"Tipo: {error_type}\nMensagem: {error_msg}", language="text")
+            import traceback
+            st.code(traceback.format_exc(), language="text")
+
+        # Registra no console também
+        import traceback
+        traceback.print_exc()
 
 
 # ==================== QUICK REPLIES ====================
@@ -203,85 +244,13 @@ def mostrar_quick_replies():
                 processar_mensagem_com_feedback("Consultar cotações de moedas", mostrar_validacao=False)
 
         with col3:
-            if st.button("📋 Entrevista", use_container_width=True):
+            if st.button("📋 Entrevista - Aumento de Score", use_container_width=True):
                 processar_mensagem_com_feedback("Fazer entrevista financeira", mostrar_validacao=False)
 
         with col4:
             if st.button("👋 Encerrar", use_container_width=True, type="secondary"):
                 st.session_state.aguardando_confirmacao = "encerrar"
                 st.rerun()
-
-    # Respostas Sim/Não
-    elif agente_ativo == "credito":
-        dados_temp = estado.get("dados_temporarios", {})
-        if dados_temp.get("pode_fazer_entrevista"):
-            st.markdown("### 💬 Deseja fazer a entrevista financeira?")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.button("✅ Sim, aceito", use_container_width=True):
-                    processar_mensagem_com_feedback("Sim, aceito fazer a entrevista", mostrar_validacao=False)
-
-            with col2:
-                if st.button("❌ Não, obrigado", use_container_width=True):
-                    processar_mensagem_com_feedback("Não quero fazer entrevista", mostrar_validacao=False)
-
-    # Entrevista - respostas comuns
-    elif agente_ativo == "entrevista_credito":
-        # Verifica qual pergunta está sendo feita
-        if st.session_state.mensagens:
-            ultima_msg = st.session_state.mensagens[-1]["mensagem"].lower()
-
-            # Pergunta sobre tipo de emprego
-            if "emprego" in ultima_msg or "trabalho" in ultima_msg:
-                st.markdown("### 💼 Tipo de emprego:")
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    if st.button("👔 CLT / Formal", use_container_width=True):
-                        processar_mensagem_com_feedback("CLT formal", mostrar_validacao=False)
-
-                with col2:
-                    if st.button("💼 Autônomo / MEI", use_container_width=True):
-                        processar_mensagem_com_feedback("Autônomo", mostrar_validacao=False)
-
-                with col3:
-                    if st.button("❌ Desempregado", use_container_width=True):
-                        processar_mensagem_com_feedback("Desempregado", mostrar_validacao=False)
-
-            # Pergunta sobre dívidas
-            elif "dívida" in ultima_msg or "divida" in ultima_msg:
-                st.markdown("### 💳 Possui dívidas ativas?")
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    if st.button("✅ Sim", use_container_width=True):
-                        processar_mensagem_com_feedback("Sim, tenho dívidas", mostrar_validacao=False)
-
-                with col2:
-                    if st.button("❌ Não", use_container_width=True):
-                        processar_mensagem_com_feedback("Não tenho dívidas", mostrar_validacao=False)
-
-    # Câmbio - moedas comuns
-    elif agente_ativo == "cambio":
-        st.markdown("### 💱 Consultar cotação:")
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            if st.button("🇺🇸 Dólar (USD)", use_container_width=True):
-                processar_mensagem_com_feedback("Quanto está o dólar?", mostrar_validacao=False)
-
-        with col2:
-            if st.button("🇪🇺 Euro (EUR)", use_container_width=True):
-                processar_mensagem_com_feedback("Quanto está o euro?", mostrar_validacao=False)
-
-        with col3:
-            if st.button("🇬🇧 Libra (GBP)", use_container_width=True):
-                processar_mensagem_com_feedback("Quanto está a libra?", mostrar_validacao=False)
-
-        with col4:
-            if st.button("↩️ Voltar", use_container_width=True, type="secondary"):
-                processar_mensagem_com_feedback("Voltar ao menu", mostrar_validacao=False)
 
 
 # ==================== MODAL DE CONFIRMAÇÃO ====================
@@ -296,8 +265,13 @@ def mostrar_modal_confirmacao():
 
         with col1:
             if st.button("✅ Sim, encerrar", use_container_width=True, type="primary"):
-                processar_mensagem_com_feedback("Encerrar atendimento", mostrar_validacao=False)
+                # Reseta o sistema completamente (mesmo comportamento do botão "Reiniciar Conversa")
+                st.session_state.sistema.reset()
+                st.session_state.conversa_iniciada = False
+                st.session_state.mensagens = []
                 st.session_state.aguardando_confirmacao = None
+                st.session_state.input_counter = 0
+                st.rerun()
 
         with col2:
             if st.button("❌ Cancelar", use_container_width=True):
@@ -336,7 +310,7 @@ def exibir_historico():
     """Exibe histórico de conversação com avatares e timestamps."""
     st.markdown("### 💬 Conversa")
 
-    chat_container = st.container(height=450)
+    chat_container = st.container(height=400)
 
     with chat_container:
         for msg in st.session_state.mensagens:
@@ -402,7 +376,7 @@ def exibir_sidebar():
         agente_map = {
             "triagem": "🎯 Triagem",
             "credito": "💳 Crédito",
-            "entrevista_credito": "📋 Entrevista de Crédito",
+            "entrevista_credito": "📋 Entrevista - Aumento de Score",
             "cambio": "💱 Câmbio",
             "encerramento": "👋 Encerrando"
         }
@@ -444,27 +418,20 @@ def exibir_sidebar():
         st.subheader("ℹ️ Sobre o Sistema")
         st.write("""
         Sistema de atendimento bancário com agentes de IA especializados usando LLM.
+        """)
 
-        **Tecnologias:**
-        - 🤖 LangGraph
-        - 🚀 Groq API (Llama 3.3 70B)
-        - 💬 Conversação natural
+        st.markdown("### 🛠️ Tecnologias Principais")
+        st.markdown("""
+        - **Python 3.8+**: Linguagem base
+        - **Streamlit**: Interface web interativa
+        - **LangChain**: Framework para aplicações com LLM's e arquitetura multi agentes
+        - **LangGraph**: Orquestração de agentes com máquina de estados
+        - **Groq API**: Inferência com opções de LLM's sem custo para volumetrias baixas (Llama 3.1 8B Instant)
+        - **NLP**: Chat de conversação natural com IA
+        - **External API**: exchangerate-api.com para cotações
         """)
 
         st.markdown("---")
-
-        # Dados de teste
-        st.subheader("🔑 Dados de Teste")
-        with st.expander("Ver CPFs de teste"):
-            st.code("""
-CPF: 12345678901
-Data: 1990-05-15
-Score: 750
-
-CPF: 98765432100
-Data: 1985-03-20
-Score: 580
-            """)
 
 
 # ==================== FUNÇÃO PRINCIPAL ====================
@@ -485,7 +452,7 @@ def main():
 
     with col1:
         st.title("🏦 Banco Ágil")
-        st.subheader("Sistema de Atendimento com Agentes de IA + LLM")
+        st.subheader("Sistema de Atendimento com Agentes de IA")
 
     with col2:
         if st.button("🔄 Reiniciar Conversa", use_container_width=True):
@@ -493,6 +460,7 @@ def main():
             st.session_state.conversa_iniciada = False
             st.session_state.mensagens = []
             st.session_state.aguardando_confirmacao = None
+            st.session_state.input_counter = 0  # Reseta contador também
             st.rerun()
 
     # Inicia conversa se não iniciada (sem chamar LLM imediatamente)
@@ -505,7 +473,7 @@ Sou seu assistente virtual inteligente, pronto para ajudá-lo com:
 - 💳 Consultas e solicitações de crédito
 - 💱 Cotações de moedas
 - 📋 Atualização de dados financeiros
-- E muito mais!
+- E mais!
 
 Para começar, por favor **informe seu CPF** (11 dígitos).
         """.strip()
@@ -524,22 +492,19 @@ Para começar, por favor **informe seu CPF** (11 dígitos).
         mostrar_modal_confirmacao()
 
     # Histórico
-    st.markdown("---")
     exibir_historico()
 
     # Quick Replies
-    st.markdown("---")
     mostrar_quick_replies()
 
     # Input do usuário
-    st.markdown("---")
-
     estado = st.session_state.sistema.get_estado()
     conversa_ativa = estado.get("conversa_ativa", True)
 
     if conversa_ativa and not st.session_state.aguardando_confirmacao:
+        st.markdown("---")
         # Form para capturar Enter
-        with st.form(key="message_form", clear_on_submit=True):
+        with st.form(key=f"message_form_{st.session_state.input_counter}", clear_on_submit=True):
             col1, col2 = st.columns([5, 1])
 
             with col1:
@@ -547,7 +512,7 @@ Para começar, por favor **informe seu CPF** (11 dígitos).
                     "Sua mensagem:",
                     placeholder="Digite sua mensagem ou use os botões acima...",
                     label_visibility="collapsed",
-                    key="input_usuario"
+                    key=f"input_usuario_{st.session_state.input_counter}"  # Key dinâmica para resetar
                 )
 
             with col2:

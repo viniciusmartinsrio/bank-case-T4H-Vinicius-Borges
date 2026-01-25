@@ -113,6 +113,42 @@ class DataManager:
             return False
 
     @staticmethod
+    def update_client_limit(cpf: str, novo_limite: float) -> bool:
+        """
+        Atualiza o limite de crédito do cliente.
+
+        Args:
+            cpf: CPF do cliente
+            novo_limite: Novo limite de crédito
+
+        Returns:
+            True se atualizado com sucesso, False caso contrário
+        """
+        try:
+            filepath = DataManager._ensure_file_exists("clientes.csv")
+
+            # Lê todos os dados
+            rows = []
+            with open(filepath, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row["cpf"] == cpf:
+                        row["limite_credito"] = str(novo_limite)
+                    rows.append(row)
+
+            # Escreve os dados atualizados
+            with open(filepath, "w", encoding="utf-8", newline="") as f:
+                fieldnames = ["cpf", "data_nascimento", "nome", "limite_credito", "score_credito"]
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            return True
+        except Exception as e:
+            print(f"Erro ao atualizar limite: {e}")
+            return False
+
+    @staticmethod
     def get_limit_by_score(score: float) -> Optional[float]:
         """
         Obtém o limite de crédito máximo permitido para um score.

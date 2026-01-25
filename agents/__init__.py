@@ -1,16 +1,18 @@
 """
 Módulo de agentes especializados do Banco Ágil.
-Cada agente é responsável por um domínio específico do atendimento.
+
+Todos os agentes utilizam LLM (Large Language Models) para conversação natural
+e são orquestrados pelo LangGraph.
 """
 
-from .triagem_agent import TriagemAgent
-from .credito_agent import CreditoAgent
-from .entrevista_credito_agent import EntrevistaCreditoAgent
-from .cambio_agent import CambioAgent
+from .triagem_agent_llm import TriagemAgentLLM
+from .credito_agent_llm import CreditoAgentLLM
+from .entrevista_credito_agent_llm import EntrevistaCreditoAgentLLM
+from .cambio_agent_llm import CambioAgentLLM
 
 __all__ = [
-    'TriagemAgent',
-    'CreditoAgent',
-    'EntrevistaCreditoAgent',
-    'CambioAgent'
+    'TriagemAgentLLM',
+    'CreditoAgentLLM',
+    'EntrevistaCreditoAgentLLM',
+    'CambioAgentLLM'
 ]

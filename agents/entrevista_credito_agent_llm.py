@@ -26,13 +26,10 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
         Args:
             groq_api_key: API key do Groq (opcional, usa .env se não fornecido)
         """
-        # Obtém ferramentas específicas para entrevista
-        tools = get_tools_for_agent("entrevista_credito")
-
-        # Inicializa agente base
+        # Inicializa agente base sem tools (chamadas Python diretas)
         super().__init__(
             agent_name="entrevista_credito",
-            tools=tools,
+            tools=[],  # Sem tool calling
             groq_api_key=groq_api_key
         )
 
@@ -69,6 +66,58 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
 
         if not self.cliente:
             return "Erro: Cliente não autenticado.", estado
+
+        # DETECTA SE ENTREVISTA FOI CONCLUÍDA: Usuário está vendo resultado e quer voltar
+        entrevista_concluida = estado.get("dados_temporarios", {}).get("entrevista_concluida", False)
+        if entrevista_concluida:
+            # Limpa flag
+            estado["dados_temporarios"]["entrevista_concluida"] = False
+            # Redireciona para triagem
+            estado["proximo_passo"] = "triagem"
+            estado["contexto_agente"]["agente_anterior"] = "triagem"
+            estado["dados_temporarios"]["voltou_ao_menu"] = True
+
+            resposta = "Você será redirecionado ao menu principal..."
+            return resposta, estado
+
+        # DETECTA PRIMEIRA ENTRADA: Se acabou de entrar vindo de outro agente
+        agente_anterior = estado.get("contexto_agente", {}).get("agente_anterior")
+
+        # Se é a primeira entrada no agente (vindo de triagem ou crédito)
+        # Apresenta saudação inicial e NÃO processa a mensagem como resposta
+        # IMPORTANTE: agente_anterior pode ser None (primeira entrada) ou outro agente
+        if agente_anterior != "entrevista_credito":
+
+            # Marca que já entrou
+            estado["contexto_agente"]["agente_anterior"] = "entrevista_credito"
+
+            # Reseta dados da entrevista (nova entrevista)
+            self.dados_coletados = {
+                "renda_mensal": None,
+                "tipo_emprego": None,
+                "despesas_fixas": None,
+                "num_dependentes": None,
+                "tem_dividas": None,
+                "pergunta_atual": 1,
+                "novo_score_calculado": None
+            }
+
+            # Prepara contexto
+            context = {
+                "nome": self.cliente["nome"],
+                "pergunta_atual": 1,
+                "total_perguntas": 5
+            }
+
+            # Saudação inicial + Primeira pergunta
+            resposta = self.invoke(
+                "Cliente chegou para entrevista financeira. "
+                "Dê boas-vindas, explique que serão 5 perguntas rápidas, "
+                "e faça a PRIMEIRA pergunta (1/5): renda mensal aproximada.",
+                context=context
+            )
+
+            return resposta, estado
 
         # Prepara contexto
         context = {
@@ -143,15 +192,33 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 self.dados_coletados["tem_dividas"] = tem_dividas
 
                 # Todas as perguntas respondidas - calcula score
-                from tools.agent_tools import calculate_credit_score, update_client_score
+                from tools.score_calculator import ScoreCalculator
+                from tools.data_manager import DataManager
 
-                resultado_calculo = calculate_credit_score(
-                    renda_mensal=self.dados_coletados["renda_mensal"],
-                    tipo_emprego=self.dados_coletados["tipo_emprego"],
-                    despesas_fixas=self.dados_coletados["despesas_fixas"],
-                    num_dependentes=self.dados_coletados["num_dependentes"],
-                    tem_dividas=self.dados_coletados["tem_dividas"]
-                )
+                try:
+                    novo_score = ScoreCalculator.calculate_score(
+                        renda_mensal=self.dados_coletados["renda_mensal"],
+                        tipo_emprego=self.dados_coletados["tipo_emprego"],
+                        despesas_fixas=self.dados_coletados["despesas_fixas"],
+                        num_dependentes=self.dados_coletados["num_dependentes"],
+                        tem_dividas=self.dados_coletados["tem_dividas"]
+                    )
+
+                    interpretacao = ScoreCalculator.get_score_interpretation(novo_score)
+
+                    resultado_calculo = {
+                        "success": True,
+                        "novo_score": novo_score,
+                        "interpretacao": interpretacao,
+                        "message": f"Novo score calculado: {novo_score:.0f} ({interpretacao})"
+                    }
+                except Exception as e:
+                    resultado_calculo = {
+                        "success": False,
+                        "novo_score": None,
+                        "interpretacao": None,
+                        "message": f"Erro ao calcular score: {str(e)}"
+                    }
 
                 if not resultado_calculo["success"]:
                     resposta = self.invoke(
@@ -164,19 +231,30 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 interpretacao = resultado_calculo["interpretacao"]
 
                 # Atualiza score no banco de dados
-                update_client_score(self.cliente["cpf"], novo_score)
+                success = DataManager.update_client_score(self.cliente["cpf"], novo_score)
+
+                if not success:
+                    resposta = self.invoke(
+                        "Erro ao atualizar score no banco de dados.",
+                        context=context
+                    )
+                    return resposta, estado
 
                 # Atualiza no estado
                 estado["cliente_autenticado"]["score_credito"] = novo_score
                 self.dados_coletados["novo_score_calculado"] = novo_score
 
-                # Prepara redirecionamento para crédito
-                estado["proximo_passo"] = "credito"
+                # Marca que entrevista foi concluída para que próxima interação volte ao menu
+                estado["dados_temporarios"]["entrevista_concluida"] = True
+
+                # NÃO redireciona automaticamente - aguarda usuário ver resultado
+                # Na próxima mensagem, detectamos a flag e voltamos ao menu
 
                 resposta = self.invoke(
                     f"Score recalculado com sucesso! Novo score: {novo_score:.0f} "
-                    f"({interpretacao}). Informe ao cliente e explique que ele será "
-                    "redirecionado ao agente de crédito para nova análise.",
+                    f"({interpretacao}). Informe ao cliente de forma clara e objetiva, "
+                    f"parabenize pelo resultado e instrua que ele pode voltar ao menu principal "
+                    f"digitando 'menu', 'voltar' ou 'opções'.",
                     context=context
                 )
 

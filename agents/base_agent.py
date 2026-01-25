@@ -46,11 +46,6 @@ class BaseAgent:
 
         # Obtém API key
         self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "GROQ_API_KEY não encontrada. Configure no arquivo .env ou "
-                "passe como parâmetro."
-            )
 
         # Obtém configuração de LLM para este agente
         self.llm_config = get_llm_config(agent_name)
@@ -101,7 +96,26 @@ class BaseAgent:
 
         # System prompt (com contexto se fornecido)
         if context:
-            formatted_prompt = self.system_prompt.format(**context)
+            # Formata apenas os placeholders que existem no contexto
+            # Mantém os outros intactos
+            import re
+            import string
+
+            class SafeFormatter(string.Formatter):
+                def get_value(self, key, args, kwargs):
+                    if isinstance(key, str):
+                        return kwargs.get(key, '{' + key + '}')
+                    else:
+                        return super().get_value(key, args, kwargs)
+
+                def format_field(self, value, format_spec):
+                    # Se o valor ainda é um placeholder não substituído, retorna como está
+                    if isinstance(value, str) and value.startswith('{') and value.endswith('}'):
+                        return value
+                    return super().format_field(value, format_spec)
+
+            formatter = SafeFormatter()
+            formatted_prompt = formatter.format(self.system_prompt, **context)
         else:
             formatted_prompt = self.system_prompt
 

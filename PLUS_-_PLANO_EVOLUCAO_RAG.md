@@ -61,7 +61,7 @@ Evoluir o sistema Banco Ágil de uma arquitetura baseada em CSV para uma soluç�
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Streamlit UI (app_llm_improved.py)         │
+│  Streamlit UI (app_cred_ai.py)         │
 └──────────────────┬──────────────────────────┘
                    │
                    ↓
@@ -103,7 +103,7 @@ Evoluir o sistema Banco Ágil de uma arquitetura baseada em CSV para uma soluç�
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Streamlit UI (app_llm_improved.py)                     │
+│  Streamlit UI (app_cred_ai.py)                     │
 │  + RAG Results Panel (fontes, trechos relevantes)       │
 └──────────────────┬──────────────────────────────────────┘
                    │
@@ -2166,7 +2166,7 @@ Apresente as opções ao cliente:
 
 ### Passo 6.1: Atualizar Streamlit UI
 
-**Atualizar: `app_llm_improved.py`**
+**Atualizar: `app_cred_ai.py`**
 
 ```python
 # Na função mostrar_quick_replies(), adicionar botão RAG:

@@ -54,6 +54,9 @@ class BancoAgilLangGraph:
         """
         workflow = StateGraph(EstadoConversacao)
 
+        # Adiciona nó roteador como ponto de entrada
+        workflow.add_node("roteador", self._node_roteador)
+
         # Adiciona nós para cada agente
         workflow.add_node("triagem", self._node_triagem)
         workflow.add_node("credito", self._node_credito)
@@ -61,8 +64,21 @@ class BancoAgilLangGraph:
         workflow.add_node("cambio", self._node_cambio)
         workflow.add_node("encerramento", self._node_encerramento)
 
-        # Define ponto de entrada
-        workflow.set_entry_point("triagem")
+        # Define roteador como ponto de entrada
+        workflow.set_entry_point("roteador")
+
+        # Roteador decide qual nó executar baseado no agente_ativo
+        workflow.add_conditional_edges(
+            "roteador",
+            self._decidir_ponto_entrada,
+            {
+                "triagem": "triagem",
+                "credito": "credito",
+                "entrevista_credito": "entrevista_credito",
+                "cambio": "cambio",
+                "encerramento": "encerramento"
+            }
+        )
 
         # Define roteamento condicional a partir da triagem
         workflow.add_conditional_edges(
@@ -121,6 +137,21 @@ class BancoAgilLangGraph:
 
         return workflow.compile()
 
+    def _node_roteador(self, estado: EstadoConversacao) -> EstadoConversacao:
+        """
+        Nó roteador que apenas repassa o estado sem modificação.
+        A decisão de rota é feita por _decidir_ponto_entrada.
+        """
+        return estado
+
+    def _decidir_ponto_entrada(self, estado: EstadoConversacao) -> str:
+        """
+        Decide qual nó deve ser executado baseado no agente_ativo.
+        Isso permite manter o contexto entre mensagens.
+        """
+        agente_ativo = estado.get("agente_ativo", "triagem")
+        return agente_ativo
+
     def _node_triagem(self, estado: EstadoConversacao) -> EstadoConversacao:
         """
         Executa o nó do agente de triagem.
@@ -132,7 +163,11 @@ class BancoAgilLangGraph:
             Estado atualizado
         """
         mensagem = estado["mensagem_atual"]
-        resposta, estado_atualizado = self.agente_triagem.processar_mensagem(mensagem, estado)
+
+        try:
+            resposta, estado_atualizado = self.agente_triagem.processar_mensagem(mensagem, estado)
+        except Exception as e:
+            raise
 
         # Adiciona resposta ao histórico
         estado_atualizado["mensagens"].append({
@@ -143,6 +178,23 @@ class BancoAgilLangGraph:
 
         # Atualiza agente ativo
         estado_atualizado["agente_ativo"] = "triagem"
+
+        # CORREÇÃO: Identifica serviço e define proximo_passo se cliente autenticado
+        # MAS só se não for um redirecionamento de outro agente
+        skip_identificar = estado_atualizado.get("dados_temporarios", {}).get("skip_identificar_servico", False)
+
+        if skip_identificar:
+            # Cliente retornou ao menu, não processar mensagem como escolha
+            estado_atualizado["dados_temporarios"]["skip_identificar_servico"] = False
+        elif estado_atualizado.get("cliente_autenticado"):
+            # Verifica se deve usar menu reduzido (sem crédito após aprovação)
+            menu_reduzido = estado_atualizado.get("dados_temporarios", {}).get("menu_reduzido", False)
+            servico = self.agente_triagem.identificar_servico(mensagem, menu_reduzido=menu_reduzido)
+            if servico and servico != "encerramento":
+                estado_atualizado["proximo_passo"] = servico
+                # Limpa flag após usar
+                if menu_reduzido:
+                    estado_atualizado["dados_temporarios"]["menu_reduzido"] = False
 
         return estado_atualizado
 
@@ -157,7 +209,14 @@ class BancoAgilLangGraph:
             Estado atualizado
         """
         mensagem = estado["mensagem_atual"]
-        resposta, estado_atualizado = self.agente_credito.processar_mensagem(mensagem, estado)
+
+        # Salva proximo_passo ANTES do processamento
+        proximo_passo_antes = estado.get("proximo_passo")
+
+        try:
+            resposta, estado_atualizado = self.agente_credito.processar_mensagem(mensagem, estado)
+        except Exception as e:
+            raise
 
         # Adiciona resposta ao histórico
         estado_atualizado["mensagens"].append({
@@ -168,6 +227,17 @@ class BancoAgilLangGraph:
 
         # Atualiza agente ativo
         estado_atualizado["agente_ativo"] = "credito"
+
+        # IMPORTANTE: Só preserva proximo_passo se o AGENTE mudou o valor
+        # Se manteve igual ao valor de entrada, significa que não houve redirecionamento
+        proximo_passo_depois = estado_atualizado.get("proximo_passo")
+
+        if proximo_passo_depois == proximo_passo_antes:
+            # Agente não mudou o valor → limpa para aguardar próximo input
+            estado_atualizado["proximo_passo"] = None
+        else:
+            # Agente definiu novo redirecionamento → preserva
+            pass  # Mantém o valor definido pelo agente
 
         return estado_atualizado
 
@@ -182,7 +252,13 @@ class BancoAgilLangGraph:
             Estado atualizado
         """
         mensagem = estado["mensagem_atual"]
-        resposta, estado_atualizado = self.agente_entrevista.processar_mensagem(mensagem, estado)
+
+        proximo_passo_antes = estado.get("proximo_passo")
+
+        try:
+            resposta, estado_atualizado = self.agente_entrevista.processar_mensagem(mensagem, estado)
+        except Exception as e:
+            raise
 
         # Adiciona resposta ao histórico
         estado_atualizado["mensagens"].append({
@@ -193,6 +269,13 @@ class BancoAgilLangGraph:
 
         # Atualiza agente ativo
         estado_atualizado["agente_ativo"] = "entrevista_credito"
+
+        # Só preserva se o agente mudou o valor
+        proximo_passo_depois = estado_atualizado.get("proximo_passo")
+        if proximo_passo_depois == proximo_passo_antes:
+            estado_atualizado["proximo_passo"] = None
+        else:
+            pass  # Mantém o valor definido pelo agente
 
         return estado_atualizado
 
@@ -207,7 +290,13 @@ class BancoAgilLangGraph:
             Estado atualizado
         """
         mensagem = estado["mensagem_atual"]
-        resposta, estado_atualizado = self.agente_cambio.processar_mensagem(mensagem, estado)
+
+        proximo_passo_antes = estado.get("proximo_passo")
+
+        try:
+            resposta, estado_atualizado = self.agente_cambio.processar_mensagem(mensagem, estado)
+        except Exception as e:
+            raise
 
         # Adiciona resposta ao histórico
         estado_atualizado["mensagens"].append({
@@ -218,6 +307,13 @@ class BancoAgilLangGraph:
 
         # Atualiza agente ativo
         estado_atualizado["agente_ativo"] = "cambio"
+
+        # Só preserva se o agente mudou o valor
+        proximo_passo_depois = estado_atualizado.get("proximo_passo")
+        if proximo_passo_depois == proximo_passo_antes:
+            estado_atualizado["proximo_passo"] = None
+        else:
+            pass  # Mantém o valor definido pelo agente
 
         return estado_atualizado
 
@@ -260,31 +356,51 @@ class BancoAgilLangGraph:
         Returns:
             Nome do próximo nó ou END
         """
+
         # Se conversa foi encerrada, vai para END
         if not estado.get("conversa_ativa", True):
             return END
 
-        # Se tem próximo_passo definido, usa ele
+        # PRIORIDADE 1: Se tem próximo_passo definido, usa ele ANTES de checar loop
         if "proximo_passo" in estado and estado["proximo_passo"]:
             proximo = estado["proximo_passo"]
             estado["proximo_passo"] = None  # Limpa para próxima iteração
+            # Reset contador pois está mudando de nó
+            if hasattr(self, '_contador_loop'):
+                self._contador_loop = 0
+                self._ultimo_no = None
             return proximo
+
+        # PROTEÇÃO CONTRA LOOP INFINITO (só checa se não há proximo_passo)
+        # Conta quantas vezes o mesmo nó foi executado seguidas vezes
+        if not hasattr(self, '_contador_loop'):
+            self._contador_loop = 0
+            self._ultimo_no = None
+
+        if estado["agente_ativo"] == self._ultimo_no:
+            self._contador_loop += 1
+        else:
+            self._contador_loop = 0
+            self._ultimo_no = estado["agente_ativo"]
+
+        # Se executou o mesmo nó mais de 3 vezes, força END para evitar loop infinito
+        if self._contador_loop > 3:
+            self._contador_loop = 0
+            self._ultimo_no = None
+            return END
 
         # Se está na triagem e ainda não autenticou
         if estado["agente_ativo"] == "triagem":
             if not estado.get("cliente_autenticado"):
-                return "triagem"  # Permanece na triagem até autenticar
+                return END
             else:
-                # Cliente autenticado - analisa mensagem para decidir serviço
-                servico = self.agente_triagem.identificar_servico(estado["mensagem_atual"])
-                if servico == "encerramento":
-                    return "encerramento"
-                elif servico:
-                    return servico
-                else:
-                    return "triagem"  # Não identificou serviço, mostra menu novamente
+                # Cliente autenticado
+                # A lógica de identificação de serviço agora está no _node_triagem
+                # que já definiu proximo_passo se necessário
+                # Aqui apenas aguardamos input do usuário
+                return END
 
-        # Se está em algum agente específico, permanece nele
+        # Se está em algum agente específico
         agente_atual = estado["agente_ativo"]
         if agente_atual in ["credito", "entrevista_credito", "cambio"]:
             # Verifica se usuário quer voltar ao menu
@@ -295,8 +411,8 @@ class BancoAgilLangGraph:
                 else:
                     return "triagem"
 
-            # Permanece no agente atual
-            return agente_atual
+            # Após processar mensagem, aguarda próximo input do usuário
+            return END
 
         # Caso padrão: volta para triagem
         return "triagem"
@@ -311,6 +427,7 @@ class BancoAgilLangGraph:
         Returns:
             Resposta do sistema
         """
+
         # Adiciona mensagem do usuário ao histórico
         self.estado["mensagens"].append({
             "role": "user",
@@ -320,11 +437,18 @@ class BancoAgilLangGraph:
         # Atualiza mensagem atual
         self.estado["mensagem_atual"] = mensagem
 
+
         # Executa o grafo
-        resultado = self.grafo.invoke(self.estado)
+        try:
+            resultado = self.grafo.invoke(self.estado)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise
 
         # Atualiza estado interno
         self.estado = resultado
+
 
         # Retorna última mensagem do assistente
         mensagens_assistant = [
@@ -333,7 +457,8 @@ class BancoAgilLangGraph:
         ]
 
         if mensagens_assistant:
-            return mensagens_assistant[-1]["content"]
+            resposta = mensagens_assistant[-1]["content"]
+            return resposta
         else:
             return "Erro: Nenhuma resposta gerada."
 
@@ -352,23 +477,10 @@ class BancoAgilLangGraph:
 
 if __name__ == "__main__":
     # Teste básico do orquestrador
-    print("=" * 80)
-    print("TESTE DO ORQUESTRADOR LANGGRAPH")
-    print("=" * 80)
 
     try:
         sistema = BancoAgilLangGraph()
-        print("\nSistema inicializado com sucesso!")
-
-        print("\n" + "-" * 80)
-        print("Teste: Saudacao inicial")
-        print("-" * 80)
-
         resposta = sistema.processar_mensagem("Ola!")
-        print(f"\nResposta:\n{resposta}")
-
+        print(f"Resposta inicial: {resposta}")
     except ValueError as e:
-        print(f"\nErro: {e}")
-        print("\nConfigure GROQ_API_KEY no arquivo .env para testar o sistema.")
-
-    print("\n" + "=" * 80)
+        print(f"Erro ao inicializar: {e}")

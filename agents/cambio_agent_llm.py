@@ -26,13 +26,10 @@ class CambioAgentLLM(BaseAgent):
         Args:
             groq_api_key: API key do Groq (opcional, usa .env se não fornecido)
         """
-        # Obtém ferramentas específicas para câmbio
-        tools = get_tools_for_agent("cambio")
-
-        # Inicializa agente base
+        # Inicializa agente base sem tools (chamadas Python diretas)
         super().__init__(
             agent_name="cambio",
-            tools=tools,
+            tools=[],  # Sem tool calling
             groq_api_key=groq_api_key
         )
 
@@ -59,69 +56,205 @@ class CambioAgentLLM(BaseAgent):
         if not self.cliente and estado.get("cliente_autenticado"):
             self.cliente = estado["cliente_autenticado"]
 
-        # Identifica código da moeda na mensagem
-        codigo_moeda = self._identificar_moeda(mensagem_usuario)
+        # DETECTA PRIMEIRA ENTRADA: Se acabou de entrar vindo de outro agente
+        agente_anterior = estado.get("contexto_agente", {}).get("agente_anterior")
 
-        # Se não identificou moeda, assume USD (padrão)
-        if not codigo_moeda:
-            codigo_moeda = "USD"
+        # Se é a primeira entrada no agente (vindo de triagem)
+        # Apresenta saudação inicial e pergunta qual moeda deseja consultar
+        # IMPORTANTE: agente_anterior pode ser None (primeira entrada) ou outro agente
+        if agente_anterior != "cambio":
 
-        # Busca cotação usando ferramenta
-        from tools.agent_tools import get_exchange_rate
+            # Marca que já entrou
+            estado["contexto_agente"]["agente_anterior"] = "cambio"
 
-        resultado = get_exchange_rate(codigo_moeda)
+            # Saudação inicial
+            resposta = self.invoke(
+                "Cliente entrou no serviço de câmbio. "
+                "Apresente-se como especialista em câmbio e pergunte qual moeda deseja consultar. "
+                "Mencione moedas comuns (USD, EUR, GBP) e explique que fornece cotações em tempo real.",
+                context={}
+            )
+
+            return resposta, estado
+
+        # Identifica moedas na mensagem (pode ser conversão entre duas moedas)
+        moedas_identificadas = self._identificar_moedas(mensagem_usuario)
+
+        # Busca cotação usando CurrencyFetcher diretamente
+        from tools.currency_fetcher import CurrencyFetcher
+
+        try:
+            # Se identificou 2 moedas, é conversão entre elas
+            if len(moedas_identificadas) >= 2:
+                moeda_origem = moedas_identificadas[0]
+                moeda_destino = moedas_identificadas[1]
+
+                cotacao = CurrencyFetcher.get_exchange_rate(
+                    from_currency=moeda_origem,
+                    to_currency=moeda_destino
+                )
+
+                if cotacao is None:
+                    resultado = {
+                        "success": False,
+                        "moeda_origem": moeda_origem,
+                        "moeda_destino": moeda_destino,
+                        "taxa": None,
+                        "message": f"Não foi possível obter cotação de {moeda_origem} para {moeda_destino}."
+                    }
+                else:
+                    resultado = {
+                        "success": True,
+                        "moeda_origem": moeda_origem,
+                        "moeda_destino": moeda_destino,
+                        "taxa": cotacao["rate"],
+                        "message": f"Cotação {moeda_origem}/{moeda_destino}: {cotacao['rate']:.4f}",
+                        "timestamp": cotacao.get("timestamp", "N/A"),
+                        "exemplos": {
+                            "1": cotacao["rate"],
+                            "100": cotacao["rate"] * 100,
+                            "1000": cotacao["rate"] * 1000
+                        }
+                    }
+            # Se identificou 1 moeda, converte para BRL (comportamento padrão)
+            elif len(moedas_identificadas) == 1:
+                codigo_moeda = moedas_identificadas[0]
+                taxa = CurrencyFetcher.get_rate(codigo_moeda)
+
+                if taxa is None:
+                    resultado = {
+                        "success": False,
+                        "moeda": codigo_moeda,
+                        "taxa": None,
+                        "message": f"Não foi possível obter cotação para {codigo_moeda}."
+                    }
+                else:
+                    resultado = {
+                        "success": True,
+                        "moeda": codigo_moeda,
+                        "moeda_destino": "BRL",
+                        "taxa": taxa,
+                        "message": f"Cotação {codigo_moeda}/BRL: R$ {taxa:.4f}",
+                        "exemplos": {
+                            "1": taxa,
+                            "100": taxa * 100,
+                            "1000": taxa * 1000
+                        }
+                    }
+            else:
+                # Não identificou moeda, assume USD para BRL
+                taxa = CurrencyFetcher.get_rate("USD")
+
+                if taxa is None:
+                    resultado = {
+                        "success": False,
+                        "moeda": "USD",
+                        "taxa": None,
+                        "message": "Não foi possível obter cotação."
+                    }
+                else:
+                    resultado = {
+                        "success": True,
+                        "moeda": "USD",
+                        "moeda_destino": "BRL",
+                        "taxa": taxa,
+                        "message": f"Cotação USD/BRL: R$ {taxa:.4f}",
+                        "exemplos": {
+                            "1": taxa,
+                            "100": taxa * 100,
+                            "1000": taxa * 1000
+                        }
+                    }
+        except Exception as e:
+            resultado = {
+                "success": False,
+                "taxa": None,
+                "message": f"Erro ao buscar cotação: {str(e)}"
+            }
 
         if not resultado["success"]:
             # Erro ao buscar cotação
             resposta = self.invoke(
-                f"Erro ao buscar cotação para {codigo_moeda}: {resultado['message']}. "
+                f"Erro ao buscar cotação: {resultado['message']}. "
                 "Informe o cliente e sugira moedas principais (USD, EUR, GBP).",
                 context={}
             )
             return resposta, estado
 
         # Cotação obtida com sucesso
-        self.ultima_moeda_consultada = codigo_moeda
+        # Verifica se é conversão entre duas moedas ou para BRL
+        if "moeda_origem" in resultado and "moeda_destino" in resultado:
+            # Conversão entre duas moedas (ex: USD para EUR)
+            moeda_origem = resultado["moeda_origem"]
+            moeda_destino = resultado["moeda_destino"]
+            self.ultima_moeda_consultada = f"{moeda_origem}/{moeda_destino}"
 
-        # Prepara contexto com dados da cotação
-        context = {
-            "moeda": resultado["moeda"],
-            "taxa": resultado["taxa"],
-            "exemplo_1": resultado["exemplos"]["1"],
-            "exemplo_100": resultado["exemplos"]["100"],
-            "exemplo_1000": resultado["exemplos"]["1000"]
-        }
+            # Prepara contexto com dados da cotação
+            context = {
+                "moeda_origem": moeda_origem,
+                "moeda_destino": moeda_destino,
+                "taxa": resultado["taxa"],
+                "exemplo_1": resultado["exemplos"]["1"],
+                "exemplo_100": resultado["exemplos"]["100"],
+                "exemplo_1000": resultado["exemplos"]["1000"]
+            }
 
-        # LLM formata a resposta de forma clara
-        resposta = self.invoke(
-            f"Apresente a cotação de {codigo_moeda} de forma clara: "
-            f"taxa R$ {resultado['taxa']:.4f}, com exemplos de conversão para "
-            "1, 100 e 1000 unidades. Use formatação com emojis 💱.",
-            context=context
-        )
+            # LLM formata a resposta de forma clara para conversão entre moedas
+            resposta = self.invoke(
+                f"Apresente a cotação de {moeda_origem} para {moeda_destino} de forma clara: "
+                f"taxa {resultado['taxa']:.4f}, com exemplos de conversão para "
+                "1, 100 e 1000 unidades. Use formatação com emojis 💱.",
+                context=context
+            )
+        else:
+            # Conversão para BRL (comportamento padrão)
+            codigo_moeda = resultado["moeda"]
+            self.ultima_moeda_consultada = codigo_moeda
+
+            # Prepara contexto com dados da cotação
+            context = {
+                "moeda": codigo_moeda,
+                "taxa": resultado["taxa"],
+                "exemplo_1": resultado["exemplos"]["1"],
+                "exemplo_100": resultado["exemplos"]["100"],
+                "exemplo_1000": resultado["exemplos"]["1000"]
+            }
+
+            # LLM formata a resposta de forma clara
+            resposta = self.invoke(
+                f"Apresente a cotação de {codigo_moeda} de forma clara: "
+                f"taxa R$ {resultado['taxa']:.4f}, com exemplos de conversão para "
+                "1, 100 e 1000 unidades. Use formatação com emojis 💱.",
+                context=context
+            )
 
         # Adiciona pergunta sobre outra consulta
-        resposta += "\n\nGostaria de consultar a cotação de outra moeda?"
+        resposta += "\n\nGostaria de consultar outra cotação?"
 
         # Guarda no estado temporário
         estado["dados_temporarios"]["ultima_cotacao"] = resultado
 
         return resposta, estado
 
-    def _identificar_moeda(self, texto: str) -> Optional[str]:
+    def _identificar_moedas(self, texto: str) -> list:
         """
-        Identifica código de moeda no texto.
+        Identifica códigos de moedas no texto (pode ser múltiplas).
 
         Args:
             texto: Texto do usuário
 
         Returns:
-            Código da moeda (ex: "USD", "EUR") ou None
+            Lista de códigos de moeda identificados (ex: ["USD", "EUR"])
         """
         texto_upper = texto.upper()
+        moedas_encontradas = []
 
         # Mapeamento de palavras para códigos
         moedas_comuns = {
+            "BRL": "BRL",
+            "REAL": "BRL",
+            "REAIS": "BRL",
+            "R$": "BRL",
             "DOLAR": "USD",
             "DÓLAR": "USD",
             "DOLLAR": "USD",
@@ -140,18 +273,21 @@ class CambioAgentLLM(BaseAgent):
             "CAD": "CAD"
         }
 
-        # Procura por matches
+        # Procura por todas as moedas mencionadas
         for palavra, codigo in moedas_comuns.items():
-            if palavra in texto_upper:
-                return codigo
+            if palavra in texto_upper and codigo not in moedas_encontradas:
+                moedas_encontradas.append(codigo)
 
-        # Tenta encontrar código de 3 letras diretamente
+        # Tenta encontrar códigos de 3 letras diretamente
         import re
-        match = re.search(r'\b([A-Z]{3})\b', texto_upper)
-        if match:
-            return match.group(1)
+        matches = re.findall(r'\b([A-Z]{3})\b', texto_upper)
+        for match in matches:
+            if match not in moedas_encontradas:
+                # Verifica se é um código válido de moeda (evita siglas aleatórias)
+                if match in moedas_comuns.values():
+                    moedas_encontradas.append(match)
 
-        return None
+        return moedas_encontradas
 
     def reset(self):
         """Reseta o estado do agente."""

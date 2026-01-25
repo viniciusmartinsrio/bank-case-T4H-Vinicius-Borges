@@ -1,212 +1,341 @@
-# 🏦 Banco Ágil - Sistema de Atendimento Inteligente com Agentes de IA
+# 🏦 Banco Ágil - Sistema de Atendimento Inteligente com LLM
 
-Um sistema completo de atendimento bancário automatizado utilizando múltiplos agentes de IA especializados. Cada agente possui responsabilidades bem definidas e trabalha de forma integrada para oferecer uma experiência de atendimento fluida e eficiente.
+Um sistema completo de atendimento bancário automatizado utilizando **LLM (Large Language Models)** e múltiplos agentes de IA especializados orquestrados por **LangGraph**. O sistema oferece conversação natural em português com capacidade de processamento contextual e tomada de decisões inteligentes.
 
 ## 📋 Visão Geral do Projeto
 
-O Banco Ágil é uma solução de atendimento ao cliente para um banco digital fictício, implementada com uma arquitetura de múltiplos agentes. O sistema simula um atendimento bancário completo, desde a autenticação do cliente até operações complexas como solicitação de aumento de limite e cálculo de score de crédito.
+O Banco Ágil é uma solução de atendimento ao cliente para um banco digital, implementada com uma arquitetura moderna de agentes conversacionais. O sistema simula um atendimento bancário completo através de **linguagem natural**, desde a autenticação do cliente até operações complexas como solicitação de aumento de limite e recálculo de score de crédito.
 
 ### Características Principais
 
-- ✅ **Autenticação Segura**: Validação de CPF e data de nascimento contra base de dados
-- ✅ **Múltiplos Agentes Especializados**: Cada um com escopo bem definido
-- ✅ **Cálculo Inteligente de Score**: Fórmula ponderada baseada em dados financeiros
-- ✅ **Gerenciamento de Solicitações**: Registro e aprovação/rejeição de pedidos
-- ✅ **Consulta de Câmbio**: Integração com API de cotações em tempo real
-- ✅ **Interface Amigável**: Streamlit para testes e demonstração
-- ✅ **Tratamento de Erros**: Validações robustas em todas as operações
+- ✅ **Conversação Natural com LLM**: Uso de Llama 3.1 8B via Groq API para diálogos fluidos e rápidos
+- ✅ **Orquestração com LangGraph**: Máquina de estados para gerenciar fluxo entre agentes
+- ✅ **Arquitetura que habilita Múltiplos Agentes Especializados**: Arquitetura preparada para utilizar diferentes LLM's para cada escopo de agente
+- ✅ **Múltiplos Agentes Especializados**: Cada um com escopo e personalidade definidos
+- ✅ **Autenticação Segura**: Validação de CPF e data de nascimento
+- ✅ **Cálculo Inteligente de Score**: Entrevista financeira com recálculo automático
+- ✅ **Persistência de Dados**: Atualização automática de score e limite em CSV
+- ✅ **Consulta de Câmbio em Tempo Real**: Integração com API pública de cotações
+- ✅ **Interface Web Moderna**: Streamlit com chat interativo e feedback visual
 
 ## 🏗️ Arquitetura do Sistema
 
 ### Estrutura Geral
 
 ```
-banco-agil-agentes/
-├── agents/                          # Módulo de agentes
-│   ├── triagem_agent.py            # Agente de triagem e autenticação
-│   ├── credito_agent.py            # Agente de crédito
-│   ├── entrevista_credito_agent.py # Agente de entrevista financeira
-│   ├── cambio_agent.py             # Agente de câmbio
-│   └── __init__.py
-├── tools/                           # Módulo de ferramentas
-│   ├── data_manager.py             # Gerenciador de CSV
-│   ├── score_calculator.py         # Calculadora de score
-│   ├── currency_fetcher.py         # Fetcher de cotações
-│   └── __init__.py
-├── data/                            # Dados (CSV)
-│   ├── clientes.csv                # Base de clientes
-│   ├── score_limite.csv            # Tabela score x limite
-│   └── solicitacoes_aumento_limite.csv # Registro de solicitações
-├── banco_agil_system.py            # Orquestrador central
-├── app.py                          # Interface Streamlit
-└── README.md                       # Este arquivo
+bank-case-T4H-Vinicius-Borges/
+├── agents/                              # Agentes especializados com LLM
+│   ├── base_agent.py                   # Classe base (ChatGroq + prompts)
+│   ├── triagem_agent_llm.py            # Autenticação e roteamento
+│   ├── credito_agent_llm.py            # Operações de crédito
+│   ├── entrevista_credito_agent_llm.py # Recálculo de score
+│   └── cambio_agent_llm.py             # Consulta de câmbio
+├── tools/                               # Ferramentas auxiliares
+│   ├── data_manager.py                 # Gerenciamento de CSV
+│   ├── score_calculator.py             # Fórmula de score
+│   ├── currency_fetcher.py             # API de cotações
+│   └── agent_tools.py                  # Tools do LangChain
+├── data/                                # Dados persistentes
+│   ├── clientes.csv                    # Base de clientes
+│   ├── score_limite.csv                # Tabela score x limite
+│   └── solicitacoes_aumento_limite.csv # Histórico de solicitações
+├── banco_agil_langgraph.py             # Orquestrador LangGraph
+├── app_cred_ai.py                      # Interface Streamlit
+├── state.py                            # Definição do estado compartilhado
+├── llm_config.py                       # Configuração do LLM
+├── .env                                # API key do Groq (não versionado)
+└── requirements.txt                    # Dependências Python
 ```
 
-### Fluxo de Atendimento
+### Arquitetura da Aplicação
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    app_cred_ai.py                           │
+│                  (Interface Streamlit)                       │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              banco_agil_langgraph.py                        │
+│            (Orquestrador LangGraph)                         │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │           Máquina de Estados (StateGraph)            │  │
+│  │                                                        │  │
+│  │  [triagem] → [credito] → [entrevista] → [cambio]    │  │
+│  │                    ↓                                   │  │
+│  │              [encerramento]                           │  │
+│  └──────────────────────────────────────────────────────┘  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│TriagemAgent  │  │CreditoAgent  │  │CambioAgent   │
+│    LLM       │  │    LLM       │  │    LLM       │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │
+       ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────┐
+│         Groq API (Llama 3.1 8B Instant)         │
+└─────────────────────────────────────────────────┘
+```
+
+### Fluxo de Atendimento com LangGraph
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CLIENTE INICIA CONTATO                       │
+│                    CLIENTE INICIA CONVERSA                      │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
                   ┌──────────────────────┐
                   │  AGENTE DE TRIAGEM   │
-                  │  - Saudação          │
+                  │  (LLM conversacional)│
                   │  - Coleta CPF        │
                   │  - Coleta Data Nasc. │
                   │  - Autentica         │
+                  │  - Apresenta Menu    │
                   └──────────┬───────────┘
                              │
-                    ┌────────┴────────┐
-                    │                 │
-        ┌───────────▼────────┐   ┌────▼──────────────┐
-        │ AUTENTICADO?       │   │ FALHA 3x?         │
-        │ SIM / NÃO          │   │ ENCERRA           │
-        └───────────┬────────┘   └───────────────────┘
-                    │
-        ┌───────────▼────────────────────┐
-        │ IDENTIFICAR ASSUNTO            │
-        │ 1. Consultar limite            │
-        │ 2. Solicitar aumento           │
-        │ 3. Entrevista financeira       │
-        │ 4. Consultar câmbio            │
-        │ 5. Encerrar                    │
-        └───────────┬────────────────────┘
-                    │
-        ┌───────────┴──────────────────────────────────┐
-        │                                              │
-        ▼                                              ▼
-┌──────────────────────┐                    ┌──────────────────────┐
-│ AGENTE DE CRÉDITO    │                    │ AGENTE DE CÂMBIO     │
-│ - Consulta limite    │                    │ - Solicita moeda     │
-│ - Processa pedido    │                    │ - Busca cotação      │
-│ - Valida score       │                    │ - Apresenta taxa     │
-│ - Aprova/Rejeita     │                    │ - Oferece conversão  │
-└──────────┬───────────┘                    └──────────────────────┘
-           │
-    ┌──────┴──────┐
-    │             │
-    ▼             ▼
-┌─────────┐  ┌──────────────────────────┐
-│APROVADO │  │ REJEITADO + OFERECER     │
-│ENCERRA  │  │ ENTREVISTA FINANCEIRA    │
-└─────────┘  └──────────┬───────────────┘
-                        │
-                        ▼
-             ┌──────────────────────────┐
-             │ AGENTE DE ENTREVISTA     │
-             │ - Coleta renda           │
-             │ - Tipo emprego           │
-             │ - Despesas fixas         │
-             │ - Dependentes            │
-             │ - Dívidas ativas         │
-             │ - Calcula novo score     │
-             │ - Atualiza BD            │
-             │ - Redireciona p/ Crédito │
-             └──────────────────────────┘
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+        ▼                    ▼                    ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│ CRÉDITO LLM  │    │ SCORE LLM    │    │ CÂMBIO LLM   │
+│ - Consulta   │    │ - Entrevista │    │ - Cotações   │
+│ - Solicita   │    │ - 5 perguntas│    │ - Conversão  │
+│ - Aprova/Rej.│    │ - Calcula    │    │ - Tempo real │
+└──────┬───────┘    └──────┬───────┘    └──────────────┘
+       │                   │
+       │ Rejeitado         │ Novo score
+       └──────────►────────┘
+                   Redireciona
 ```
 
-### Agentes Especializados
-
-#### 1. **Agente de Triagem** (`TriagemAgent`)
-- **Responsabilidade**: Porta de entrada do atendimento
-- **Funcionalidades**:
-  - Saudação inicial
-  - Coleta de CPF e data de nascimento
-  - Validação contra `clientes.csv`
-  - Permite até 3 tentativas de autenticação
-  - Direcionamento para agente apropriado
-- **Arquivo**: `agents/triagem_agent.py`
-
-#### 2. **Agente de Crédito** (`CreditoAgent`)
-- **Responsabilidade**: Operações de crédito
-- **Funcionalidades**:
-  - Consulta de limite de crédito atual
-  - Processamento de solicitação de aumento
-  - Validação contra tabela `score_limite.csv`
-  - Aprovação automática se score permite
-  - Rejeição com oferta de entrevista se necessário
-  - Registro em `solicitacoes_aumento_limite.csv`
-- **Arquivo**: `agents/credito_agent.py`
-
-#### 3. **Agente de Entrevista de Crédito** (`EntrevistaCreditoAgent`)
-- **Responsabilidade**: Cálculo de score de crédito
-- **Funcionalidades**:
-  - Entrevista estruturada com 5 perguntas
-  - Coleta de dados financeiros
-  - Cálculo de novo score usando fórmula ponderada
-  - Atualização de score em `clientes.csv`
-  - Redirecionamento para Agente de Crédito
-- **Arquivo**: `agents/entrevista_credito_agent.py`
-
-#### 4. **Agente de Câmbio** (`CambioAgent`)
-- **Responsabilidade**: Consultas de câmbio
-- **Funcionalidades**:
-  - Busca cotação em tempo real via API
-  - Suporta múltiplas moedas
-  - Cálculo de conversão
-  - Apresentação formatada de taxas
-- **Arquivo**: `agents/cambio_agent.py`
-
-### Ferramentas Auxiliares
-
-#### 1. **DataManager** (`tools/data_manager.py`)
-Gerencia todas as operações com arquivos CSV:
-- `authenticate_client()`: Autentica cliente
-- `get_client_by_cpf()`: Busca cliente por CPF
-- `update_client_score()`: Atualiza score
-- `get_limit_by_score()`: Obtém limite máximo por score
-- `register_limit_request()`: Registra solicitação
-- `get_all_requests()`: Lista todas as solicitações
-
-#### 2. **ScoreCalculator** (`tools/score_calculator.py`)
-Implementa a fórmula de cálculo de score:
+### Parâmetros iniciais de LLM's por Agente
 
 ```
-score = (
-    (renda_mensal / (despesas + 1)) * peso_renda +
-    peso_emprego[tipo_emprego] +
-    peso_dependentes[num_dependentes] +
-    peso_dividas[tem_dividas]
-)
+| Agente | Modelo | Temperature | Top-P | Max Tokens | Característica |
+|--------|--------|-------------|-------|------------|----------------|
+| Triagem | Llama 3.1 8B | 0.3 | 0.9 | 200 | Preciso, protocolar |
+| Crédito | Llama 3.1 8B | 0.4 | 0.85 | 250 | Empático, claro |
+| Entrevista | Llama 3.1 8B | 0.7 | 0.95 | 300 | Natural, conversacional |
+| Câmbio | Llama 3.1 8B | 0.2 | 0.8 | 150 | Factual, conciso |
 ```
 
-**Pesos utilizados:**
-- `peso_renda`: 30
-- `peso_emprego`: formal=300, autônomo=200, desempregado=0
-- `peso_dependentes`: 0=100, 1=80, 2=60, 3+=30
-- `peso_dividas`: sim=-100, não=100
+### Manipulação de Dados (DataManager)
 
-#### 3. **CurrencyFetcher** (`tools/currency_fetcher.py`)
-Busca cotações de moedas:
-- Integração com API pública `exchangerate-api.com`
-- Sem necessidade de autenticação
-- Suporta todas as moedas principais
+O sistema utiliza operações atômicas sobre arquivos CSV através da classe `DataManager`:
 
-### Orquestrador Central
+```
+┌────────────────────────────────────────────────────────────────┐
+│                         DataManager                            │
+│                  (tools/data_manager.py)                       │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  1. authenticate_client(cpf, data_nascimento)                 │
+│     └─> Read clientes.csv                                     │
+│     └─> Valida CPF + Data                                     │
+│     └─> Return DadosCliente ou None                           │
+│                                                                │
+│  2. update_client_score(cpf, novo_score)                      │
+│     └─> Read clientes.csv (pandas)                            │
+│     └─> Update score_credito WHERE cpf = ?                    │
+│     └─> Write clientes.csv (atômico)                          │
+│                                                                │
+│  3. update_client_limit(cpf, novo_limite)                     │
+│     └─> Read clientes.csv                                     │
+│     └─> Update limite_credito WHERE cpf = ?                   │
+│     └─> Write clientes.csv                                    │
+│                                                                │
+│  4. get_limit_by_score(score)                                 │
+│     └─> Read score_limite.csv                                 │
+│     └─> Find range WHERE score_min <= score <= score_max      │
+│     └─> Return limite_maximo                                  │
+│                                                                │
+│  5. register_limit_request(cpf, limite_atual, novo_limite,    │
+│                             status)                            │
+│     └─> Read solicitacoes_aumento_limite.csv                  │
+│     └─> Append nova linha com timestamp                       │
+│     └─> Write solicitacoes_aumento_limite.csv                 │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 
-**`BancoAgilSystem`** (`banco_agil_system.py`):
-- Gerencia todos os agentes
-- Mantém estado da conversa
-- Roteia mensagens para agente apropriado
-- Controla fluxo de atendimento
-- Mantém histórico de mensagens
+                              ▼
+
+┌────────────────────────────────────────────────────────────────┐
+│                      Arquivos CSV                              │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  clientes.csv                                                  │
+│  ├─ cpf (PK)                                                   │
+│  ├─ data_nascimento                                            │
+│  ├─ nome                                                       │
+│  ├─ limite_credito (ATUALIZADO por update_client_limit)       │
+│  └─ score_credito (ATUALIZADO por update_client_score)        │
+│                                                                │
+│  score_limite.csv (READ-ONLY)                                 │
+│  ├─ score_minimo                                               │
+│  ├─ score_maximo                                               │
+│  └─ limite_maximo                                              │
+│                                                                │
+│  solicitacoes_aumento_limite.csv (APPEND-ONLY)                │
+│  ├─ cpf_cliente                                                │
+│  ├─ data_hora_solicitacao (timestamp)                         │
+│  ├─ limite_atual                                               │
+│  ├─ novo_limite_solicitado                                    │
+│  └─ status_pedido (aprovado/rejeitado)                        │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Padrão de Consistência**:
+1. **Read-Modify-Write Atômico**: Todas as atualizações seguem o padrão:
+   - Ler CSV completo em memória (pandas DataFrame)
+   - Aplicar modificações no DataFrame
+   - Escrever CSV completo de volta (substitui arquivo)
+
+2. **Append-Only para Auditoria**: `solicitacoes_aumento_limite.csv` nunca é modificado, apenas recebe novas linhas
+
+3. **Validação Sempre via CSV**: Score x Limite sempre consultado em `score_limite.csv`, nunca hard-coded
+
+### Tecnologias Principais
+
+- **Python 3.8+**: Linguagem base
+- **LangGraph**: Orquestração de agentes com máquina de estados
+- **LangChain**: Framework para aplicações com LLM
+- **Groq API**: Inferência ultra-rápida de LLM (Llama 3.1 8B Instant)
+- **Streamlit**: Interface web interativa
+- **CSV**: Persistência de dados (clientes, scores, solicitações)
+- **API Pública**: exchangerate-api.com para cotações
+
+## ✨ Funcionalidades Implementadas
+
+### 1. Autenticação Conversacional
+- **Coleta de CPF**: Aceita diversos formatos (12345678901, 123.456.789-01)
+- **Coleta de Data**: Normaliza múltiplos formatos (YYYY-MM-DD, DD/MM/YYYY, "15/05/1990")
+- **Validação Segura**: Autenticação contra base de clientes em CSV
+- **Tentativas Limitadas**: Máximo de 3 tentativas de login
+- **Mensagens Claras**: Feedback específico sobre erros de autenticação
+
+### 2. Gestão de Limite de Crédito
+- **Consulta de Limite**: Visualização de limite atual e score
+- **Solicitação de Aumento**: Processamento conversacional de pedidos
+- **Validação Automática**: Regras baseadas em tabela score x limite
+- **Aprovação/Rejeição**: Decisão instantânea com explicação detalhada
+- **Persistência**: Atualização automática em `clientes.csv` e `solicitacoes_aumento_limite.csv`
+- **Histórico**: Registro de data/hora, valores e status de todas as solicitações
+
+### 3. Recálculo de Score de Crédito
+- **Entrevista Estruturada**: 5 perguntas financeiras via conversação natural
+- **Extração de Dados**: NLP para interpretar respostas livres:
+  - "ganho 5 mil" → R$ 5.000,00
+  - "trabalho registrado" → formal
+  - "tenho dois filhos" → 2 dependentes
+- **Cálculo Inteligente**: Fórmula multi-fatorial realista
+- **Atualização Imediata**: Novo score salvo em CSV
+- **Redirecionamento**: Retorno automático ao agente de crédito
+
+### 4. Consulta de Câmbio em Tempo Real
+- **API Pública**: Integração com exchangerate-api.com
+- **Múltiplas Moedas**: Suporte a USD, EUR, GBP, JPY, ARS, e mais
+- **Detecção Inteligente**: Reconhece "dólar", "euro", "libra" ou códigos ISO
+- **Conversão Exemplificada**: Mostra conversões para R$ 1, R$ 100 e R$ 1000
+- **Tratamento de Erros**: Mensagens claras sobre falhas de API
+
+### 5. Orquestração com LangGraph
+- **Máquina de Estados**: Transições controladas entre agentes
+- **Roteamento Dinâmico**: Decisões baseadas em contexto
+- **Proteção Anti-Loop**: Contador de iterações com limite de 3
+- **Estado Compartilhado**: Contexto mantido entre transições
+- **Encerramento Limpo**: Opção de logout a qualquer momento
+
+### 6. Interface Web Interativa
+- **Chat em Tempo Real**: Interface Streamlit com mensagens formatadas
+- **Botões de Quick Reply**: Atalhos para menu principal
+- **Histórico Visual**: Todas as mensagens mantidas na sessão
+- **Feedback de Status**: Cliente autenticado exibido na sidebar
+- **Reiniciar Conversa**: Botão para logout e nova sessão
+
+---
+
+## 🤖 Agentes Especializados
+
+### 1. **Agente de Triagem** (`TriagemAgentLLM`)
+- **Responsabilidade**: Porta de entrada conversacional
+- **Funcionalidades**:
+  - Saudação natural em português
+  - Coleta de CPF com validação de formato (11 dígitos)
+  - Coleta de data de nascimento (múltiplos formatos aceitos)
+  - Autenticação **imediata** contra `clientes.csv`
+  - Até 3 tentativas de login antes de bloquear
+  - Apresentação de menu numerado (4 opções)
+  - Identificação de intenção do usuário para roteamento
+  - Tratamento de solicitação de encerramento
+- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), DataManager
+- **Arquivo**: `agents/triagem_agent_llm.py`
+
+### 2. **Agente de Crédito** (`CreditoAgentLLM`)
+- **Responsabilidade**: Gestão completa de limite de crédito
+- **Funcionalidades**:
+  - Consulta de limite atual e score do cliente
+  - Processamento de solicitações de aumento em linguagem natural
+  - Extração de valores monetários ("quero 8 mil" → R$ 8.000)
+  - Validação automática contra tabela `score_limite.csv`
+  - Aprovação instantânea se dentro do limite permitido
+  - Rejeição com explicação se exceder limite
+  - Atualização de limite em `clientes.csv` quando aprovado
+  - Oferta proativa de entrevista financeira se rejeitado
+  - Registro timestampado em `solicitacoes_aumento_limite.csv`
+- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), DataManager, regex para extração de valores
+- **Arquivo**: `agents/credito_agent_llm.py`
+
+### 3. **Agente de Entrevista de Crédito** (`EntrevistaCreditoAgentLLM`)
+- **Responsabilidade**: Recálculo de score através de entrevista
+- **Funcionalidades**:
+  - Entrevista estruturada em 5 etapas sequenciais
+  - Extração de dados de linguagem natural:
+    - **Renda mensal**: "ganho 5 mil" → R$ 5.000,00
+    - **Tipo de emprego**: "CLT" → formal, "freelancer" → autônomo
+    - **Despesas fixas**: "pago 2000 de contas" → R$ 2.000,00
+    - **Dependentes**: "tenho 2 filhos" → 2
+    - **Dívidas**: "não tenho dívida" → False
+  - Cálculo de novo score usando `ScoreCalculator`
+  - Atualização automática em `clientes.csv`
+  - Mensagem final com instrução para voltar ao menu
+  - Contexto preservado para redirecionamento ao CreditoAgent
+- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), ScoreCalculator, DataManager, regex avançado
+- **Arquivo**: `agents/entrevista_credito_agent_llm.py`
+
+### 4. **Agente de Câmbio** (`CambioAgentLLM`)
+- **Responsabilidade**: Consultas de cotação de moedas estrangeiras
+- **Funcionalidades**:
+  - Busca de cotações em tempo real via API pública
+  - Suporte a 30+ moedas (USD, EUR, GBP, JPY, ARS, CAD, etc.)
+  - Detecção de moeda em linguagem natural ("dólar" → USD)
+  - Apresentação formatada com exemplos de conversão
+  - Conversão para múltiplos valores (R$ 1, R$ 100, R$ 1000)
+  - Tratamento de erros de API (timeout, moeda inválida)
+  - Opção de consultar outra moeda ou retornar ao menu
+- **Tecnologias**: ChatGroq (Llama 3.1 8B Instant), CurrencyFetcher (requests + API pública)
+- **Arquivo**: `agents/cambio_agent_llm.py`
 
 ## 🗄️ Estrutura de Dados
 
 ### `data/clientes.csv`
-Base de dados de clientes para autenticação:
+Base de clientes (atualizada automaticamente):
 
 ```csv
 cpf,data_nascimento,nome,limite_credito,score_credito
 12345678901,1990-05-15,João Silva,5000.00,750
 98765432109,1985-08-22,Maria Santos,8000.00,820
-...
+55555555555,1992-03-10,Pedro Oliveira,10000.00,650
 ```
 
 ### `data/score_limite.csv`
-Tabela de relação entre score e limite máximo:
+Tabela de relação score x limite máximo:
 
 ```csv
 score_minimo,score_maximo,limite_maximo
@@ -219,265 +348,370 @@ score_minimo,score_maximo,limite_maximo
 ```
 
 ### `data/solicitacoes_aumento_limite.csv`
-Registro de todas as solicitações de aumento:
+Histórico de solicitações (append-only):
 
 ```csv
 cpf_cliente,data_hora_solicitacao,limite_atual,novo_limite_solicitado,status_pedido
-12345678901,2024-01-21T10:30:00.123456,5000.00,8000.00,aprovado
-98765432109,2024-01-21T11:15:00.654321,8000.00,15000.00,rejeitado
-...
+12345678901,2026-01-24T10:30:00.123456,5000.00,8000.00,aprovado
 ```
-
-## ✨ Funcionalidades Implementadas
-
-### 1. Autenticação de Cliente
-- Validação de CPF (11 dígitos, sem repetição)
-- Validação de data de nascimento (formato YYYY-MM-DD)
-- Busca em base de dados
-- Até 3 tentativas permitidas
-- Encerramento após falhas consecutivas
-
-### 2. Consulta de Limite de Crédito
-- Exibição do limite atual
-- Exibição do score de crédito
-- Opção de solicitar aumento
-
-### 3. Solicitação de Aumento de Limite
-- Validação de novo limite (deve ser maior que atual)
-- Verificação contra tabela de score x limite
-- Aprovação automática se score permite
-- Rejeição com oferta de entrevista se necessário
-- Registro em arquivo CSV com timestamp ISO 8601
-
-### 4. Entrevista Financeira
-- 5 perguntas estruturadas
-- Coleta de renda mensal
-- Tipo de emprego (formal, autônomo, desempregado)
-- Despesas fixas mensais
-- Número de dependentes
-- Existência de dívidas ativas
-- Cálculo de novo score com fórmula ponderada
-- Atualização automática em base de dados
-
-### 5. Consulta de Câmbio
-- Busca de cotação em tempo real
-- Suporte a múltiplas moedas
-- Cálculo de conversão
-- Tratamento de erros de conectividade
-
-### 6. Tratamento de Erros
-- Validação de entrada do usuário
-- Mensagens de erro claras
-- Recuperação de falhas
-- Logging de operações
 
 ## 🚀 Como Executar
 
 ### Pré-requisitos
 
 - Python 3.8+
-- pip (gerenciador de pacotes Python)
+- Conta no Groq (gratuita): https://console.groq.com/keys
 
-### Instalação de Dependências
+### Instalação
 
+1. **Clone o repositório**
 ```bash
-pip install langgraph langchain langchain-core python-dotenv pandas requests streamlit
+git clone <repo-url>
+cd bank-case-T4H-Vinicius-Borges
 ```
 
-Ou usando o arquivo de requisitos (se disponível):
-
+2. **Instale as dependências**
 ```bash
 pip install -r requirements.txt
 ```
 
-### Execução da Aplicação
-
-#### Opção 1: Interface Streamlit (Recomendado)
-
+3. **Configure a API key do Groq**
 ```bash
-streamlit run app.py
+# Copie o template
+cp .env.example .env
+
+# Edite .env e adicione sua chave
+GROQ_API_KEY=gsk_sua_chave_aqui
+```
+
+4. **Execute a aplicação**
+```bash
+streamlit run app_cred_ai.py
 ```
 
 A aplicação abrirá em `http://localhost:8501`
 
-#### Opção 2: Teste em Linha de Comando
-
-```bash
-python3 -c "
-from banco_agil_system import BancoAgilSystem
-
-sistema = BancoAgilSystem()
-print(sistema.iniciar_atendimento())
-
-# Simula entrada do usuário
-entrada = input('> ')
-resposta = sistema.processar_entrada(entrada)
-print(resposta)
-"
-```
-
 ### Dados de Teste
 
-Use os seguintes dados para testar autenticação:
+Use os seguintes clientes para testar:
 
 | CPF | Data Nascimento | Nome |
 |-----|-----------------|------|
-| 12345678901 | 1990-05-15 | João Silva |
-| 98765432109 | 1985-08-22 | Maria Santos |
-| 55555555555 | 1992-03-10 | Pedro Oliveira |
+| 12345678909 | 1990-05-15 | Vinicius Martins
+| 12345678901 | 1985-08-22 | Maria Santos
 
-## 🧪 Testes e Fluxos
+## 🧪 Fluxos de Teste
 
-### Fluxo 1: Consultar Limite de Crédito
-1. Iniciar atendimento
-2. Fornecer CPF: `12345678901`
-3. Fornecer data: `1990-05-15`
-4. Escolher opção: `1` (Consultar limite)
-5. Visualizar limite atual
+### Fluxo 1: Consulta de Limite
+1. Digite CPF: `12345678909`
+2. Digite data: `1990-05-15`
+3. Clique no botão "Crédito" ou digite `1`
+4. Visualize limite atual: R$ 5.000,00
 
-### Fluxo 2: Solicitar Aumento Aprovado
-1. Autenticar com `98765432109` / `1985-08-22` (score 820)
-2. Escolher opção: `2` (Solicitar aumento)
-3. Solicitar novo limite: `10000` (permitido para score 820)
-4. Receber aprovação
+### Fluxo 2: Solicitação Aprovada
+1. Autentique com CPF `12345678901` (score 820)
+2. Escolha "Crédito"
+3. Digite: "Quero solicitar aumento para 12000"
+4. Sistema valida: 820 permite até R$ 15.000
+5. **Aprovação automática** + atualização em CSV
 
-### Fluxo 3: Solicitar Aumento Rejeitado + Entrevista
-1. Autenticar com `55555555555` / `1992-03-10` (score 650)
-2. Escolher opção: `2` (Solicitar aumento)
-3. Solicitar novo limite: `15000` (não permitido para score 650)
-4. Receber rejeição
-5. Aceitar entrevista financeira
-6. Responder perguntas (exemplo: renda 5000, formal, despesas 2000, 1 dependente, sem dívidas)
-7. Novo score calculado (aproximadamente 780)
-8. Retornar ao Agente de Crédito para nova análise
+### Fluxo 3: Solicitação Rejeitada + Entrevista
+1. Autentique com CPF `12345678909` (score 650)
+2. Escolha "Crédito"
+3. Digite: "Quero 15000 de limite"
+4. Sistema rejeita (650 permite apenas R$ 10.000)
+5. Sistema oferece entrevista financeira
+6. Digite: "Sim" ou "1"
+7. Responda as 5 perguntas
+8. Novo score calculado e atualizado
+9. Redirecionamento automático para crédito
 
-### Fluxo 4: Consultar Câmbio
-1. Autenticar
-2. Escolher opção: `4` (Consultar câmbio)
-3. Fornecer moeda: `USD` (ou deixar em branco para padrão)
-4. Visualizar cotação USD/BRL
-5. Optar por consultar outra moeda
+### Fluxo 4: Consulta de Câmbio
+1. Autentique normalmente
+2. Clique em "Câmbio" ou digite `3`
+3. Digite: "USD" ou "Quanto está o dólar?"
+4. Visualize cotação em tempo real
+5. Sistema oferece consultar outra moeda
 
-## 🎯 Desafios Enfrentados e Soluções
+## 🚧 Desafios Enfrentados e Soluções
 
-### 1. **Validação de CPF**
-**Desafio**: Validar CPF de forma simples sem algoritmo complexo
-**Solução**: Implementar validação básica (11 dígitos, sem repetição) que é suficiente para o caso de uso
+### 1. Engenharia de Prompts dos Agentes de IA
+**Desafio**: Encontrar um equilíbrio lógico entre as instruções dos prompts dos agentes e as funcionalidades de placeholder foi o maior desafio
 
-### 2. **Fluxo de Redirecionamento Implícito**
-**Desafio**: Redirecionar entre agentes sem o cliente perceber a transição
-**Solução**: Implementar orquestrador central que gerencia transições de forma transparente
+**Solução Implementada**: Equilibrar as instruções com funções hardcode para otimizar performance e tokens ($$$)
 
-### 3. **Cálculo de Score Ponderado**
-**Desafio**: Implementar fórmula que normaliza diferentes escalas de entrada
-**Solução**: Usar fórmula ponderada com normalização para escala 0-1000
+### 2. Dinâmica de estados dos agentes
+**Desafio**: Definir melhor solução para controle de estados dos Agentes
 
-### 4. **Persistência de Dados**
-**Desafio**: Manter dados consistentes entre execuções
-**Solução**: Usar CSV com operações ACID simples (leitura completa, modificação, escrita)
+**Solução Implementada**: Uso do TypedDict: Type safety; Auto-complete no IDE; Documentação implícita; Compatibilidade com LangGraph
 
-### 5. **Tratamento de Erros de API**
-**Desafio**: Lidar com indisponibilidade de API de câmbio
-**Solução**: Implementar try-catch com mensagens amigáveis ao usuário
+### 3. Loop Infinito no LangGraph
+**Desafio**: Sistema ficava processando indefinidamente após receber input do usuário, causando travamento da interface.
 
-## 🔧 Escolhas Técnicas e Justificativas
+**Causa Raiz**: A função `_decidir_proximo_passo()` retornava o nome de um agente (ex: `"triagem"`) ao invés de `END` quando aguardava nova mensagem do usuário. Isso causava um loop: triagem → decisão → triagem → decisão...
 
-### 1. **Python como Linguagem Principal**
-- Excelente para prototipagem rápida
-- Bibliotecas maduras para manipulação de dados (pandas, csv)
-- Suporte nativo para integração com LLMs
+**Solução Implementada**:
+```python
+# ANTES (causava loop)
+if not estado.get("cliente_autenticado"):
+    return "triagem"  # Loop infinito!
 
-### 2. **CSV para Armazenamento de Dados**
-- Simplicidade de implementação
-- Fácil visualização e edição manual
-- Suficiente para escopo do desafio
-- Pode ser facilmente migrado para banco de dados relacional
+# DEPOIS (correção)
+if not estado.get("cliente_autenticado"):
+    return END  # Aguarda próxima mensagem do usuário
+```
 
-### 3. **Streamlit para Interface**
-- Desenvolvimento rápido de UI
-- Excelente para demonstrações
-- Suporte nativo para chat
-- Ideal para prototipagem
+**Proteção Adicional**: Implementado contador de loops com limite de 3 iterações para detectar e prevenir futuros loops.
 
-### 4. **Arquitetura de Agentes Especializados**
-- Separação clara de responsabilidades
-- Fácil manutenção e extensão
-- Simula comportamento de equipe humana
-- Escalável para novos agentes
-
-### 5. **API Pública para Câmbio**
-- Sem necessidade de autenticação
-- Dados em tempo real
-- Confiável e gratuita
-
-## 📈 Possíveis Extensões
-
-1. **Integração com LLM**
-   - Usar LangChain para processamento de linguagem natural
-   - Melhorar compreensão de intenção do usuário
-
-2. **Banco de Dados Relacional**
-   - Migrar de CSV para PostgreSQL/MySQL
-   - Melhorar performance e segurança
-
-3. **Autenticação Biométrica**
-   - Adicionar validação de face/digital
-   - Aumentar segurança
-
-4. **Histórico de Transações**
-   - Registrar todas as operações
-   - Auditoria completa
-
-5. **Recomendações Personalizadas**
-   - Sugerir produtos baseado em perfil
-   - Aumentar satisfação do cliente
-
-6. **Integração com Sistemas Externos**
-   - Conectar com sistemas de pagamento
-   - Integrar com redes de ATM
-
-## 📝 Estrutura de Código
-
-### Padrões Utilizados
-
-1. **Class-based Architecture**: Cada agente é uma classe com métodos bem definidos
-2. **Separation of Concerns**: Ferramentas separadas de agentes
-3. **Single Responsibility**: Cada classe tem uma responsabilidade clara
-4. **Error Handling**: Validações em múltiplas camadas
-
-### Convenções de Código
-
-- Nomes descritivos em português (domínio do negócio)
-- Type hints em todas as funções
-- Docstrings em formato Google
-- Comentários explicativos para lógica complexa
-
-## 🔐 Segurança
-
-### Medidas Implementadas
-
-1. **Validação de Entrada**: Todas as entradas são validadas
-2. **Tratamento de Exceções**: Erros são capturados e tratados
-3. **Isolamento de Agentes**: Cada agente trabalha com dados específicos
-4. **Auditoria**: Todas as solicitações são registradas
-
-### Recomendações para Produção
-
-1. Usar HTTPS para comunicação
-2. Implementar autenticação multi-fator
-3. Criptografar dados sensíveis
-4. Usar banco de dados com controle de acesso
-5. Implementar rate limiting
-6. Adicionar logging centralizado
-
-## 📞 Suporte e Contato
-
-Para dúvidas ou sugestões sobre o sistema, consulte a documentação ou abra uma issue no repositório.
-
-## 📄 Licença
-
-Este projeto é fornecido como solução para desafio técnico.
+**Arquivo**: `banco_agil_langgraph.py:_decidir_proximo_passo()`
 
 ---
 
-**Desenvolvido como solução para Desafio Técnico: Agente Bancário Inteligente**
+
+## 💡 Escolhas Técnicas e Justificativas
+
+### 1. Por que LangGraph ao invés de Chain simples?
+
+**Decisão**: Utilizar LangGraph como orquestrador principal.
+
+**Alternativas consideradas**:
+- LangChain Chains simples (sequenciais)
+- CrewAI
+- AutoGen
+- Implementação manual com classes Python
+
+**Justificativas**:
+1. **Máquina de Estados Explícita**: LangGraph permite definir claramente todos os estados possíveis (triagem, crédito, entrevista, câmbio, encerramento) e transições entre eles. Isso facilita raciocínio sobre o fluxo.
+
+2. **Roteamento Condicional**: A função `add_conditional_edges()` permite decisões dinâmicas baseadas no estado, essencial para um sistema bancário onde diferentes clientes seguem diferentes fluxos.
+
+3. **Controle de Loops**: Diferente de chains sequenciais, LangGraph permite voltar a estados anteriores (ex: entrevista → crédito) sem causar loops infinitos graças ao uso de `END`.
+
+4. **Debug e Observabilidade**: Cada nó do grafo é isolado, facilitando debug. Logs mostram claramente qual nó está executando.
+
+5. **Escalabilidade**: Adicionar novos agentes é simples: criar nó → adicionar transições. Não requer reestruturar todo o código.
+
+**Trade-off**: Maior complexidade inicial comparado a chains simples, mas ganho significativo em manutenibilidade para sistemas multi-agente complexos.
+
+---
+
+### 2. Por que Groq API ao invés de outros providers?
+
+**Decisão**: Utilizar Groq para inferência de LLM.
+
+**Alternativas consideradas**:
+- OpenAI API (GPT-4)
+- Anthropic Claude API
+- Modelos locais (Ollama)
+- Azure OpenAI
+
+**Justificativas**:
+1. **Velocidade de Inferência**: Groq entrega respostas em < 1 segundo graças à sua arquitetura LPU (Language Processing Unit), crucial para UX de chat em tempo real.
+
+2. **Free Tier Generoso**: 100k tokens/dia gratuitos, suficiente para prototipagem e testes extensivos sem custos.
+
+3. **Modelo Rápido e Eficiente**: Llama 3.1 8B Instant oferece boa capacidade de conversação em português com inferência extremamente rápida (< 500ms) e consumo eficiente de tokens.
+
+4. **Simplicidade de Integração**: LangChain tem integração nativa (`langchain-groq`), reduzindo complexidade.
+
+5. **Sem Infraestrutura**: Diferente de modelos locais, não requer GPU, VRAM, ou configuração complexa.
+
+**Trade-off**: Dependência de API externa (requer conexão internet). Mitigado com tratamento robusto de erros de rede.
+
+**Nota sobre Modelo Ativo**: O projeto está configurado para usar **Llama 3.1 8B Instant** (linha 32 de `llm_config.py`). O modelo maior **Llama 3.3 70B** está disponível mas desativado para economizar tokens do free tier. Para ativar o modelo maior:
+```python
+# Em llm_config.py, linha 32
+ACTIVE_MODEL = DEFAULT_MODEL  # Troca para 70B (mais capaz, mais lento, mais tokens)
+```
+
+---
+
+### 3. Por que não sugerir um SGBD ao invés de usar CSV?
+
+**Decisão**: Utilizar arquivos CSV para persistência.
+
+**Alternativas consideradas**:
+- PostgreSQL / MySQL (relacional)
+- MongoDB (NoSQL)
+- SQLite (embedded)
+
+**Justificativas**:
+1. **Prototipagem Rápida**: Foco em validar lógica de negócio e agentes, não em engenharia de dados.
+
+2. **Simplicidade de Setup**: Zero configuração - basta ter Python e pandas. Não requer instalar/configurar servidor de banco.
+
+3. **Portabilidade**: Arquivos CSV funcionam em qualquer ambiente (Windows, Linux, Mac) sem dependências adicionais.
+
+4. **Inspeção Manual Fácil**: Qualquer pessoa pode abrir CSV em Excel/LibreOffice e verificar dados. Essencial para debug e validação.
+
+5. **Operações Atômicas**: Implementamos padrão read-modify-write que funciona bem para volumes baixos (< 1000 clientes).
+
+6. **Migração Futura Simples**: Estrutura tabular se traduz diretamente para tabelas SQL. Migrar para PostgreSQL é trivial:
+   ```python
+   # Migração futura (1 linha)
+   df.to_sql('clientes', engine, if_exists='replace')
+   ```
+
+**Trade-off**: Não escalável para produção com múltiplos usuários concorrentes. Adequado para protótipo e demo.
+
+**Quando migrar para BD**: Quando houver:
+- > 1000 clientes
+- Necessidade de transações ACID
+- Múltiplos processos concorrentes
+- Requisitos de auditoria avançada
+
+---
+
+### 4. Por que Streamlit ao invés de outras interfaces?
+
+**Decisão**: Utilizar Streamlit para interface web.
+
+**Alternativas consideradas**:
+- Flask/FastAPI + React
+- Gradio
+- CLI puro (terminal)
+- Jupyter Notebook
+
+**Justificativas**:
+1. **Desenvolvimento Rápido**: Streamlit permite criar interface interativa em < 50 linhas de código Python puro, sem HTML/CSS/JS.
+
+2. **Componentes de Chat Nativos**: `st.chat_message()` e `st.chat_input()` são perfeitos para aplicações conversacionais.
+
+3. **Reatividade Automática**: Sistema de rerun automático mantém UI sincronizada com estado.
+
+4. **Session State Integrado**: `st.session_state` permite manter contexto entre interações sem backend complexo.
+
+5. **Deploy Simples**: Streamlit Cloud permite deploy gratuito com 1 clique.
+
+**Trade-off**: Menos controle sobre UI comparado a React. Adequado para demos e protótipos, não para aplicações enterprise complexas.
+
+---
+
+### 5. Por que Arquitetura de Agentes Especializados?
+
+**Decisão**: Criar agentes separados (Triagem, Crédito, Entrevista, Câmbio) ao invés de um único agente monolítico.
+
+**Alternativas consideradas**:
+- Agente único com prompt gigante
+- Sistema de sub-prompts dinâmicos
+- Função calling sem agentes
+
+**Justificativas**:
+1. **Separação de Responsabilidades**: Cada agente tem escopo bem definido, facilitando manutenção e testes.
+
+2. **Prompts Otimizados**: Cada agente tem prompt específico para sua tarefa, diminuindo a chance de alucinações e melhorando qualidade das respostas e guardrails.
+
+3. **Contexto Isolado**: Dados temporários de cada agente não poluem o contexto global.
+
+4. **Testabilidade**: Cada agente pode ser testado isoladamente com mocks.
+
+5. **Reutilização e Hybrid-LLM's**: Agentes podem ser usados em outros contextos (ex: CambioAgent em outro sistema) em com diferentes LLM's.
+
+6. **Escalabilidade**: Novos serviços bancários = novos agentes, sem modificar existentes (Open/Closed Principle).
+
+**Padrão de Design**: Strategy Pattern - cada agente é uma estratégia de processamento diferente.
+
+---
+
+### 6. Por que BaseAgent com Herança?
+
+**Decisão**: Criar classe `BaseAgent` com lógica comum de LLM.
+
+**Alternativas consideradas**:
+- Composição (passar LLM como dependência)
+- Funções utilitárias ao invés de classes
+- Cada agente implementar do zero
+
+**Justificativas**:
+1. **DRY (Don't Repeat Yourself)**: Configuração do LLM, carregamento de prompts, e invocação são idênticos. Código comum fica em um só lugar.
+
+2. **Consistência**: Todos os agentes usam mesma configuração (temperatura, modelo, max_tokens).
+
+3. **Facilidade de Mudança**: Trocar de Groq para OpenAI requer alterar apenas `BaseAgent.__init__()`.
+
+4. **Hierarquia Clara**: Relação "É-UM" (TriagemAgent **é um** BaseAgent) é semanticamente correta.
+
+**Padrão de Design**: Template Method Pattern - `BaseAgent` define estrutura, subclasses implementam `processar_mensagem()`.
+
+---
+
+### 7. Por que Validação de Score em CSV ao invés de Hard-coded?
+
+**Decisão**: Tabela `score_limite.csv` configurável ao invés de constantes no código.
+
+**Alternativas consideradas**:
+- Constantes Python (`SCORE_RANGES = {...}`)
+- Fórmula matemática (ex: `limite = score * 50`)
+- Regras hard-coded com if/elif
+
+**Justificativas**:
+1. **Configurabilidade**: Gerente do banco pode alterar tabela sem mexer em código Python.
+
+2. **Auditabilidade**: Mudanças em limites ficam registradas no histórico do arquivo CSV.
+
+3. **Validação de Negócio**: Não programadores podem revisar e validar regras.
+
+4. **Flexibilidade**: Regras complexas (ex: limites diferentes por região) são possíveis apenas adicionando colunas.
+
+**Trade-off**: Leitura de CSV a cada validação (custo negligível para volumes baixos). Otimização futura: cache em memória.
+
+---
+
+### 8. Por que "proteção contra loops com contador"?
+
+**Decisão**: Implementar contador de loops com limite de 3 iterações.
+
+**Justificativas**:
+1. **Fail-Safe**: Mesmo com bugs futuros, sistema não trava indefinidamente.
+
+2. **Debug Facilitado**: Logs mostram claramente quando limite é atingido.
+
+3. **UX**: Usuário não fica esperando infinitamente.
+
+**Implementação**:
+```python
+self._contador_loop = 0
+
+if self._contador_loop > 3:
+    print("[AVISO] Loop detectado!")
+    return END
+```
+
+**Trade-off**: Limita fluxos legítimos muito complexos. Valor de 3 escolhido empiricamente (suficiente para casos reais, protege contra bugs).
+
+## 📈 Possíveis Próximas Melhorias
+
+1. **RAG (Retrieval Augmented Generation)**
+   - Consulta a documentos bancários
+   - Respostas baseadas em regulamentação
+
+2. **Banco de Dados Relacional**
+   - Migrar de CSV para PostgreSQL
+   - Transações ACID
+
+3. **Autenticação Multi-fator**
+   - SMS/Email de verificação
+   - Biometria
+
+4. **Dashboard de Analytics**
+   - Métricas de atendimento
+   - Taxa de aprovação/rejeição
+
+5. **Suporte a Mais Idiomas**
+   - Inglês, Espanhol
+   - Detecção automática
+
+
+## 📞 Suporte
+
+Para dúvidas ou sugestões:
+- Consulte o desenvolvedor do projeto, Vinicius Borges
+- E-mail - vinicius.borges.rio@gmail.com
+- Linkedin - https://www.linkedin.com/in/viniciusmartinsrio
+
+---
+
+**Desenvolvido por "https://github.com/viniciusmartinsrio/" como solução para Desafio Técnico: Agente Bancário Inteligente com LLM**
+
+**Versão**: 1.0 (com LangGraph e conversação natural)
+**Última atualização**: Janeiro 2026
