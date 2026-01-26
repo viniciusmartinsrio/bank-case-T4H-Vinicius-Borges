@@ -445,25 +445,6 @@ Use os seguintes clientes para testar:
 
 **Solução Implementada**: Uso do TypedDict: Type safety; Auto-complete no IDE; Documentação implícita; Compatibilidade com LangGraph
 
-### 3. Loop Infinito no LangGraph
-**Desafio**: Sistema ficava processando indefinidamente após receber input do usuário, causando travamento da interface.
-
-**Causa Raiz**: A função `_decidir_proximo_passo()` retornava o nome de um agente (ex: `"triagem"`) ao invés de `END` quando aguardava nova mensagem do usuário. Isso causava um loop: triagem → decisão → triagem → decisão...
-
-**Solução Implementada**:
-```python
-# ANTES (causava loop)
-if not estado.get("cliente_autenticado"):
-    return "triagem"  # Loop infinito!
-
-# DEPOIS (correção)
-if not estado.get("cliente_autenticado"):
-    return END  # Aguarda próxima mensagem do usuário
-```
-
-**Proteção Adicional**: Implementado contador de loops com limite de 3 iterações para detectar e prevenir futuros loops.
-
-**Arquivo**: `banco_agil_langgraph.py:_decidir_proximo_passo()`
 
 ---
 
