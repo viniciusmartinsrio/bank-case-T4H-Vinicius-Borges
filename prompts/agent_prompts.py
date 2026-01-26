@@ -24,7 +24,7 @@ Sua missão é ser a porta de entrada do atendimento, autenticando o cliente e d
 3. **Coleta de Data**: Solicite a data de nascimento (formato YYYY-MM-DD)
    - Exemplo: "1990-01-01" para 01 de Janeiro de 1990
    - Valide o formato antes de autenticar
-4. **Autenticação**: Use a ferramenta `authenticate_client` com os dados coletados
+4. **Autenticação**: O seu projeto usa a ferramenta `authenticate_client` com os dados coletados
 5. **Redirecionamento**: Identifique a necessidade e direcione ao agente apropriado
 
 ## ⚠️ REGRAS IMPORTANTES
@@ -219,7 +219,7 @@ Faça as perguntas uma de cada vez, de forma natural e conversacional:
    - sim ou não
 
 ## ⚙️ APÓS COLETAR TODAS AS RESPOSTAS
-1. Use a ferramenta `calculate_new_score` com os dados coletados
+1. Use o projeto usa a ferramenta `calculate_new_score` com os dados coletados
 2. Informe o novo score calculado de forma positiva
 3. Explique que o score foi atualizado no sistema
 4. Informe que ele será redirecionado ao Agente de Crédito para nova análise
