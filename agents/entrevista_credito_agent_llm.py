@@ -247,39 +247,76 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
 
                 novo_score = resultado_calculo["novo_score"]
                 interpretacao = resultado_calculo["interpretacao"]
+                score_atual = self.cliente["score_credito"]
 
-                # Atualiza score no banco de dados
-                success = DataManager.update_client_score(self.cliente["cpf"], novo_score)
+                # Compara novo score com o score atual
+                if novo_score < score_atual:
+                    # Novo score é menor - mantém o score atual
+                    score_final = score_atual
+                    interpretacao_final = ScoreCalculator.get_score_interpretation(score_atual)
+                    score_foi_mantido = True
 
-                if not success:
+                    # Não atualiza o banco de dados nem o estado
+                    # Score permanece inalterado
+
+                    self.dados_coletados["novo_score_calculado"] = novo_score  # Guarda o calculado para referência
+
+                    # Sincroniza dados da entrevista com o estado para exibição do progresso
+                    estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+
+                    # Marca que entrevista foi concluída para que próxima interação volte ao menu
+                    estado["dados_temporarios"]["entrevista_concluida"] = True
+
+                    # Informa ao cliente que o score foi mantido
                     resposta = self.invoke(
-                        "Erro ao atualizar score no banco de dados.",
+                        f"Entrevista concluída! O score calculado foi {novo_score:.0f} ({interpretacao}), "
+                        f"que é menor que seu score atual de {score_atual:.0f} ({interpretacao_final}). "
+                        f"Boa notícia: mantivemos seu score atual de {score_atual:.0f} para seu benefício! "
+                        f"Informe ao cliente de forma clara e positiva que o score dele foi preservado, "
+                        f"e instrua que ele pode voltar ao menu principal digitando 'menu', 'voltar' ou 'opções'.",
                         context=context
                     )
+
                     return resposta, estado
 
-                # Atualiza no estado
-                estado["cliente_autenticado"]["score_credito"] = novo_score
-                self.dados_coletados["novo_score_calculado"] = novo_score
+                else:
+                    # Novo score é maior ou igual - atualiza normalmente
+                    score_final = novo_score
+                    interpretacao_final = interpretacao
+                    score_foi_mantido = False
 
-                # Sincroniza dados da entrevista com o estado para exibição do progresso
-                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+                    # Atualiza score no banco de dados
+                    success = DataManager.update_client_score(self.cliente["cpf"], novo_score)
 
-                # Marca que entrevista foi concluída para que próxima interação volte ao menu
-                estado["dados_temporarios"]["entrevista_concluida"] = True
+                    if not success:
+                        resposta = self.invoke(
+                            "Erro ao atualizar score no banco de dados.",
+                            context=context
+                        )
+                        return resposta, estado
 
-                # NÃO redireciona automaticamente - aguarda usuário ver resultado
-                # Na próxima mensagem, detectamos a flag e voltamos ao menu
+                    # Atualiza no estado
+                    estado["cliente_autenticado"]["score_credito"] = novo_score
+                    self.dados_coletados["novo_score_calculado"] = novo_score
 
-                resposta = self.invoke(
-                    f"Score recalculado com sucesso! Novo score: {novo_score:.0f} "
-                    f"({interpretacao}). Informe ao cliente de forma clara e objetiva, "
-                    f"parabenize pelo resultado e instrua que ele pode voltar ao menu principal "
-                    f"digitando 'menu', 'voltar' ou 'opções'.",
-                    context=context
-                )
+                    # Sincroniza dados da entrevista com o estado para exibição do progresso
+                    estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
 
-                return resposta, estado
+                    # Marca que entrevista foi concluída para que próxima interação volte ao menu
+                    estado["dados_temporarios"]["entrevista_concluida"] = True
+
+                    # NÃO redireciona automaticamente - aguarda usuário ver resultado
+                    # Na próxima mensagem, detectamos a flag e voltamos ao menu
+
+                    resposta = self.invoke(
+                        f"Score recalculado com sucesso! Novo score: {novo_score:.0f} "
+                        f"({interpretacao}). Informe ao cliente de forma clara e objetiva, "
+                        f"parabenize pelo resultado e instrua que ele pode voltar ao menu principal "
+                        f"digitando 'menu', 'voltar' ou 'opções'.",
+                        context=context
+                    )
+
+                    return resposta, estado
 
         # Se chegou aqui, resposta não foi reconhecida - LLM pede esclarecimento
         resposta = self.invoke(
