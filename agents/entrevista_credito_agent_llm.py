@@ -102,6 +102,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 "novo_score_calculado": None
             }
 
+            # Sincroniza dados da entrevista com o estado para exibição do progresso
+            estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+
             # Prepara contexto
             context = {
                 "nome": self.cliente["nome"],
@@ -136,6 +139,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 self.dados_coletados["renda_mensal"] = valor
                 self.dados_coletados["pergunta_atual"] = 2
 
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+
                 resposta = self.invoke(
                     f"Renda mensal coletada: R$ {valor:,.2f}. "
                     "Confirme e faça a próxima pergunta (2/5): tipo de emprego.",
@@ -149,6 +155,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
             if tipo:
                 self.dados_coletados["tipo_emprego"] = tipo
                 self.dados_coletados["pergunta_atual"] = 3
+
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
 
                 resposta = self.invoke(
                     f"Tipo de emprego coletado: {tipo}. "
@@ -164,6 +173,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 self.dados_coletados["despesas_fixas"] = valor
                 self.dados_coletados["pergunta_atual"] = 4
 
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+
                 resposta = self.invoke(
                     f"Despesas fixas coletadas: R$ {valor:,.2f}. "
                     "Confirme e faça a próxima pergunta (4/5): número de dependentes.",
@@ -178,6 +190,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 self.dados_coletados["num_dependentes"] = num
                 self.dados_coletados["pergunta_atual"] = 5
 
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
+
                 resposta = self.invoke(
                     f"Número de dependentes coletado: {num}. "
                     "Confirme e faça a última pergunta (5/5): tem dívidas ativas?",
@@ -190,6 +205,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
             tem_dividas = self._identificar_sim_nao(mensagem_usuario)
             if tem_dividas:
                 self.dados_coletados["tem_dividas"] = tem_dividas
+
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
 
                 # Todas as perguntas respondidas - calcula score
                 from tools.score_calculator import ScoreCalculator
@@ -243,6 +261,9 @@ class EntrevistaCreditoAgentLLM(BaseAgent):
                 # Atualiza no estado
                 estado["cliente_autenticado"]["score_credito"] = novo_score
                 self.dados_coletados["novo_score_calculado"] = novo_score
+
+                # Sincroniza dados da entrevista com o estado para exibição do progresso
+                estado["dados_temporarios"]["dados_entrevista"] = self.dados_coletados.copy()
 
                 # Marca que entrevista foi concluída para que próxima interação volte ao menu
                 estado["dados_temporarios"]["entrevista_concluida"] = True

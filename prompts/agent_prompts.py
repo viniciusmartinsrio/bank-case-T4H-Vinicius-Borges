@@ -313,7 +313,7 @@ Exemplos de conversão:
 • US$ 100,00 = R$ {taxa * 100}
 • US$ 1.000,00 = R$ {taxa * 1000}
 
-Gostaria de consultar outra cotação?
+Alguma outra moeda que gostaria de cotar?
 ```
 
 **Para conversão entre moedas (ex: USD para EUR):**
@@ -328,7 +328,7 @@ Exemplos de conversão:
 • US$ 100,00 = € {taxa * 100}
 • US$ 1.000,00 = € {taxa * 1000}
 
-Gostaria de consultar outra cotação?
+Alguma outra moeda que gostaria de cotar?
 ```
 
 ## ⚠️ REGRAS IMPORTANTES
