@@ -30,6 +30,9 @@ bank-case-T4H-Vinicius-Borges/
 │   ├── credito_agent_llm.py            # Operações de crédito
 │   ├── entrevista_credito_agent_llm.py # Recálculo de score
 │   └── cambio_agent_llm.py             # Consulta de câmbio
+├── prompts/                             # Prompts dos agentes
+│   ├── __init__.py                     # Inicialização do módulo
+│   └── agent_prompts.py                # Sistema de prompts centralizados
 ├── tools/                               # Ferramentas auxiliares
 │   ├── data_manager.py                 # Gerenciamento de CSV
 │   ├── score_calculator.py             # Fórmula de score
@@ -204,10 +207,10 @@ O sistema utiliza operações atômicas sobre arquivos CSV através da classe `D
 ### Tecnologias Principais
 
 - **Python 3.8+**: Linguagem base
-- **LangGraph**: Orquestração de agentes com máquina de estados
-- **LangChain**: Framework para aplicações com LLM
-- **Groq API**: Inferência ultra-rápida de LLM (Llama 3.1 8B)
 - **Streamlit**: Interface web interativa
+- **LangChain**: Framework para aplicações com LLM
+- **LangGraph**: Orquestração de agentes com máquina de estados
+- **Groq API**: Inferência de LLM (Llama 3.1 8B)
 - **CSV**: Persistência de dados (clientes, scores, solicitações)
 - **API Pública**: exchangerate-api.com para cotações
 
@@ -440,10 +443,10 @@ Use os seguintes clientes para testar:
 
 **Solução Implementada**: Implementar funcionalidades hardcode para otimizar performance e número de tokens ($$$) e deixar os LLM's focados em performar apenas como "atendente de linguagem natural" (sem "reasonings" que podem absorver alguma funcionalidade do projeto - como buscar publicamente cotação de moeda por exemplo)
 
-### 2. Dinâmica de estados dos agentes
-**Desafio**: Definir melhor solução para controle de estados dos Agentes
+### 2. Solução de tipagem
+**Desafio**: Definir melhor solução de tipagem para o controle de estados dos Agentes
 
-**Solução Implementada**: Uso do TypedDict: Type safety; Auto-complete no IDE; Documentação implícita; Compatibilidade com LangGraph
+**Solução Implementada**: Uso do TypedDict: Type safety; Auto-complete no IDE; Documentação implícita; Compatibilidade com LangGraph (integração nativa)
 
 
 ---
